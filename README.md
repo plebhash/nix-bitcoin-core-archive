@@ -6,6 +6,8 @@ But sometimes, we need to run old releases in a nix environment.
 
 `nix-bitcoin-core-archive` provides Nix derivations for old and outdated `bitcoin-core` releases.
 
+Note: `bitcoin-wallet` and `bitcoin-qt` are not yet supported by the derivations.
+
 ---
 
  - [ ] Bitcoin Core 25.1
@@ -20,7 +22,7 @@ But sometimes, we need to run old releases in a nix environment.
  - [ ] Bitcoin Core 22.0
  - [ ] Bitcoin Core 0.21.2
  - [ ] Bitcoin Core 0.21.1
- - [ ] Bitcoin Core 0.21.0
+ - [x] Bitcoin Core 0.21.0
  - [ ] Bitcoin Core 0.20.2
  - [ ] Bitcoin Core 0.20.1
  - [ ] Bitcoin Core 0.20.0
