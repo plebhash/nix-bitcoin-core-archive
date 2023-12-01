@@ -1,12 +1,24 @@
 # nix-bitcoin-core-archive 
 
-[nix-bitcoin](https://github.com/fort-nix/nix-bitcoin) is useful for running up-to-date `bitcoind`.
+[nix-bitcoin](https://github.com/fort-nix/nix-bitcoin) is useful for running up-to-date `bitcoin-core`.
 
-But sometimes, we need to run old releases in a nix environment.
+But sometimes, we need to run old or patched releases in a nix environment.
 
-`nix-bitcoin-core-archive` provides Nix derivations for old and outdated `bitcoin-core` releases.
+`nix-bitcoin-core-archive` provides Nix derivations for:
+- old and outdated `bitcoin-core` releases
+- development forks (e.g.: [`github.com/Fi3/bitcoin`](https://github.com/Fi3/bitcoin) for a SV2-patch TP)
 
 Note: `bitcoin-wallet` and `bitcoin-qt` are not yet supported by the derivations.
+
+## instructions
+
+Just `cd` into the directory of the chosen `bitcoin-core` version, and then do a `nix-build`. The build artifacts will be placed at `result`. For example, if you want to run `bitcoin-core-0.21.0`:
+```
+$ cd bitcoin-core-0.21.0
+$ nix-build
+$ ls result/bin
+bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
+``` 
 
 ---
 
