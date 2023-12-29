@@ -21,7 +21,7 @@
 
 with lib;
 let
-  version = "0.21.0";
+  version = "v26.99.0-ga9c93227f248ac9f6dcaa194aab17675394d8c3e";
   majorVersion = versions.major version;
 in
 stdenv.mkDerivation rec {
@@ -29,10 +29,10 @@ stdenv.mkDerivation rec {
   inherit version;
 
   src = fetchFromGitHub {
-    owner = "Fi3";
+    owner = "Sjors";
     repo = "bitcoin";
-    rev = "db9ecc415d163793ab5b298b82ef8ddcb3485df7";
-    hash = "sha256-F64t/axzQN6ZP7s3fq0/M7yA9LqHpReDwi03kj79dno=";
+    rev = "a9c93227f248ac9f6dcaa194aab17675394d8c3e";
+    hash = "sha256-7/UFIUhl5WA1GKjU+KdSCFPCJGdxZ+vgK3gAotaFxxU=";
   };
 
   nativeBuildInputs =
