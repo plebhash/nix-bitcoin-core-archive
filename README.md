@@ -23,10 +23,9 @@ bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
 ``` 
 ---
 
-# SV2 TP patches
+# Custom Patches
 
- - [x] [`TP Patch by @Fi3`](https://github.com/Fi3/stratum) - v26.99.0
- - [x] [`TP Patch by @Sjors`](https://github.com/Sjors/stratum) - v25.99.0
+ - [x] [`SV2 Patch by @Sjors`](https://github.com/Sjors/stratum) - v25.99.0
 
 ---
 
