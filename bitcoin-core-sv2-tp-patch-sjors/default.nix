@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> { system = builtins.currentSystem; } 
+{ pkgs ? import <nixpkgs> { system = builtins.currentSystem; }
 , lib ? pkgs.lib
 , stdenv ? pkgs.stdenv
 , fetchFromGitHub ? pkgs.fetchFromGitHub
@@ -14,14 +14,14 @@
 , zlib ? pkgs.zlib
 , db48 ? pkgs.db48
 , sqlite ? pkgs.sqlite
-, qrencode ? pkgs.qrencode 
+, qrencode ? pkgs.qrencode
 , python3 ? pkgs.python3
 , nixosTests ? pkgs.nixosTests
 }:
 
 with lib;
 let
-  version = "v26.99.0-ga9c93227f248ac9f6dcaa194aab17675394d8c3e";
+  version = "v27.99.0-ga9c93227f248ac9f6dcaa194aab17675394d8c3e";
   majorVersion = versions.major version;
 in
 stdenv.mkDerivation rec {
@@ -31,8 +31,8 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "Sjors";
     repo = "bitcoin";
-    rev = "a9c93227f248ac9f6dcaa194aab17675394d8c3e";
-    hash = "sha256-7/UFIUhl5WA1GKjU+KdSCFPCJGdxZ+vgK3gAotaFxxU=";
+    rev = "sv2-tp-0.1.2";
+    hash = "sha256-ZNt9srJGf65Eh5yrI3kL4ldotfWKbKASxcWGIwZXvPE=";
   };
 
   nativeBuildInputs =
