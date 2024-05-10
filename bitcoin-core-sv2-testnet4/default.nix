@@ -32,7 +32,7 @@ stdenv.mkDerivation rec {
     owner = "plebhash";
     repo = "bitcoin";
     rev = "5c8442df982aa045c7aebb66a841e6b4b01c9c72";
-    hash = "sha256-ZNt9srJGf65Eh5yrI3kL4ldotfWKbKASxcWGIwZXvPE=";
+    hash = "sha256-s43jKBhxUn8XoBi7EuFjjSUUcOPKhjLa5n61OW4rsOo=";
   };
 
   nativeBuildInputs =
