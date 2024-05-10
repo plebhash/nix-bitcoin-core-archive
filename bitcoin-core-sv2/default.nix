@@ -21,7 +21,7 @@
 
 with lib;
 let
-  version = "v27.99.0-ga9c93227f248ac9f6dcaa194aab17675394d8c3e";
+  version = "v25.99.0";
   majorVersion = versions.major version;
 in
 stdenv.mkDerivation rec {
