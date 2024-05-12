@@ -29,10 +29,10 @@ stdenv.mkDerivation rec {
   inherit version;
 
   src = fetchFromGitHub {
-    owner = "plebhash";
+    owner = "stratospher";
     repo = "bitcoin";
-    rev = "5c8442df982aa045c7aebb66a841e6b4b01c9c72";
-    hash = "sha256-s43jKBhxUn8XoBi7EuFjjSUUcOPKhjLa5n61OW4rsOo=";
+    rev = "1ad31bebe5a118ac8d7789617177460969385d3f";
+    hash = "sha256-dP/lhwtUnPSm9UmqKCUYwhr4vGDas8QHYrgSRzQjFhk=";
   };
 
   nativeBuildInputs =

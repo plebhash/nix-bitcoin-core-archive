@@ -26,6 +26,7 @@ bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
 # Custom Patches
 
  - [x] [`SV2 Patch by @Sjors`](https://github.com/Sjors/stratum) - v25.99.0
+ - [x] [`SV2 + testnet4 Patch by @Sjors + @fjahr + @stratospher](https://github.com/plebhash/bitcoin) - v25.99.0
  - [x] [`MutinyNet Patch by @benthecarman`](https://github.com/benthecarman/bitcoin) - v24.99.0
  - 
 ---
@@ -75,3 +76,5 @@ bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
  - [ ] Bitcoin Core v0.11.2
  - [ ] Bitcoin Core v0.11.1
  - [ ] Bitcoin Core v0.11.0
+
+ - bitcoind -signet -signetchallenge=512102f7561d208dd9ae99bf497273e16f389bdbd6c4742ddb8e6b216e64fa2928ad8f51ae -signetblocktime=30 -rpcallowip=0.0.0.0/0
