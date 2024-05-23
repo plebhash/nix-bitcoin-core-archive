@@ -42,7 +42,7 @@ bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
  - [ ] Bitcoin Core v23.1
  - [ ] Bitcoin Core v23.0
  - [ ] Bitcoin Core v22.1
- - [ ] Bitcoin Core v22.0
+ - [x] Bitcoin Core v22.0
  - [ ] Bitcoin Core v0.21.2
  - [ ] Bitcoin Core v0.21.1
  - [x] Bitcoin Core v0.21.0
