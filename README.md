@@ -8,7 +8,7 @@ But sometimes, we need to run old or patched releases in a nix environment.
 - old and outdated `bitcoin-core` releases
 - development forks 
 
-(e.g.: [`github.com/Fi3/bitcoin`](https://github.com/Fi3/bitcoin) for a SV2-patch TP)
+(e.g.: [`github.com/Sjors/bitcoin`](https://github.com/Sjors/bitcoin) for a SV2-patch TP)
 
 Note: `bitcoin-wallet` and `bitcoin-qt` are not yet supported by the derivations.
 
