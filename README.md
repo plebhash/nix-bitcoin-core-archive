@@ -16,9 +16,9 @@ But sometimes, we need to run old or patched releases in a nix environment.
 
 ## instructions
 
-Just `cd` into the directory of the chosen `bitcoin-core` version, and then do a `nix-build`. The build artifacts will be placed at `result`. For example, if you want to run `bitcoin-core-0.21.0`:
+Just `cd` into the directory of the chosen version, and then do a `nix-build`. The build artifacts will be placed at `result`. For example, if you want to run `core-0.21.0`:
 ```
-$ cd bitcoin-core-0.21.0
+$ cd core-0.21.0
 $ nix-build
 $ ls result/bin
 bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
