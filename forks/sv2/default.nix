@@ -56,4 +56,10 @@ stdenv.mkDerivation rec {
   checkFlags = [ "LC_ALL=en_US.UTF-8" ];
 
   enableParallelBuilding = true;
+
+  meta = {
+    description = "Bitcoin Core with a StratumV2 patch";
+    license = licenses.mit;
+    platforms = platforms.unix;
+  };
 }

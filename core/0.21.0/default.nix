@@ -63,17 +63,7 @@ stdenv.mkDerivation rec {
   };
 
   meta = {
-    description = "Peer-to-peer electronic cash system";
-    longDescription = ''
-      Bitcoin is a free open source peer-to-peer electronic cash system that is
-      completely decentralized, without the need for a central server or trusted
-      parties. Users hold the crypto keys to their own money and transact directly
-      with each other, with the help of a P2P network to check for double-spending.
-    '';
-    homepage = "https://bitcoin.org/";
-    downloadPage = "https://bitcoincore.org/bin/bitcoin-core-${version}/";
-    changelog = "https://bitcoincore.org/en/releases/${version}/";
-    maintainers = with maintainers; [ prusnak roconnor ];
+    description = "Bitcoin Core 0.21.0";
     license = licenses.mit;
     platforms = platforms.unix;
   };
