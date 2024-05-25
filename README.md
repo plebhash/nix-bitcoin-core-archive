@@ -22,14 +22,7 @@ $ cd core-0.21.0
 $ nix-build
 $ ls result/bin
 bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
-``` 
----
-
-# Custom Patches
-
- - [x] [SV2 Patch by @Sjors](https://github.com/Sjors/stratum) - v25.99.0
- - [x] [SV2 + testnet4 Patch by @Sjors + @fjahr + @stratospher](https://github.com/plebhash/bitcoin) - v25.99.0
- - [x] [MutinyNet Patch by @benthecarman](https://github.com/benthecarman/bitcoin) - v24.99.0
+```
 
 ---
 
@@ -78,3 +71,11 @@ bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
  - [ ] Bitcoin Core v0.11.2
  - [ ] Bitcoin Core v0.11.1
  - [ ] Bitcoin Core v0.11.0
+
+---
+
+# Custom Forks
+
+- [x] [SV2 Patch by @Sjors](https://github.com/Sjors/stratum) - v25.99.0
+- [x] [SV2 + testnet4 Patch by @Sjors + @fjahr + @stratospher](https://github.com/plebhash/bitcoin) - v25.99.0
+- [x] [MutinyNet Patch by @benthecarman](https://github.com/benthecarman/bitcoin) - v24.99.0
