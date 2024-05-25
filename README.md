@@ -14,6 +14,8 @@ But sometimes, we need to run old or patched releases in a nix environment.
 - old and outdated `bitcoin-core` releases
 - custom forks
 
+Note: `darwin` is not yet supported. Derivarions are only tested on Linux.
+
 ## instructions
 
 Just `cd` into the directory of the chosen version, and then do a `nix-build`. The build artifacts will be placed at `result`. For example, if you want to run `0.21.0`:

@@ -38,8 +38,7 @@ stdenv.mkDerivation rec {
 
 nativeBuildInputs =
   [ autoreconfHook pkg-config intltool ]
-  ++ optionals stdenv.isLinux [ util-linux ]
-  ++ optionals stdenv.isDarwin [ hexdump ];
+  ++ optionals stdenv.isLinux [ util-linux ];
 
   buildInputs = [ boost libevent miniupnpc zeromq zlib ];
 
