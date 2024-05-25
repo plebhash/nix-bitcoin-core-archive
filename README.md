@@ -23,7 +23,7 @@ Just `cd` into the directory of the chosen version, and then do a `nix-build`. T
 $ cd core/0.21.0
 $ nix-build
 $ ls result/bin
-bitcoin-cli  bitcoind  bitcoin-tx  bitcoin-util
+bitcoin-cli  bitcoind  bitcoin-qt  bitcoin-tx  bitcoin-wallet
 ```
 
 ---

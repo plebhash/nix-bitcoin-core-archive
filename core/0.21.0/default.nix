@@ -15,6 +15,9 @@
 , sqlite ? pkgs.sqlite
 , qrencode ? pkgs.qrencode 
 , python3 ? pkgs.python3
+, wrapQtAppsHook ? pkgs.qt5.wrapQtAppsHook
+, qtbase ? pkgs.qt5.qtbase
+, qttools ? pkgs.qt5.qttools
 , nixosTests ? pkgs.nixosTests
 }:
 
@@ -36,17 +39,18 @@ stdenv.mkDerivation rec {
   };
 
   nativeBuildInputs =
-    [ autoreconfHook pkg-config ]
-    ++ optionals stdenv.isLinux [ util-linux ];
+    [ autoreconfHook pkg-config wrapQtAppsHook ]
+    ++ lib.optionals stdenv.isLinux [ util-linux ];
 
-  buildInputs = [ boost libevent miniupnpc zeromq zlib ];
+  buildInputs = [ boost libevent miniupnpc zeromq zlib db48 sqlite qrencode qtbase qttools ];
 
   configureFlags = [
     "--with-boost-libdir=${boost.out}/lib"
     "--disable-bench"
-    "--disable-wallet"
     "--disable-tests"
     "--disable-gui-tests"
+    "--with-gui=qt5"
+    "--with-qt-bindir=${qtbase.dev}/bin:${qttools.dev}/bin"
   ];
 
   checkInputs = [ python3 ];
