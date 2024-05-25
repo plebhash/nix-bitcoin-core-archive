@@ -6,7 +6,6 @@
 , pkg-config ? pkgs.pkg-config
 , util-linux ? pkgs.util-linux
 , hexdump ? pkgs.hexdump
-, autoSignDarwinBinariesHook ? pkgs.autoSignDarwinBinariesHook
 , boost ? pkgs.boost
 , libevent ? pkgs.libevent
 , miniupnpc ? pkgs.miniupnpc
@@ -38,8 +37,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs =
     [ autoreconfHook pkg-config ]
     ++ optionals stdenv.isLinux [ util-linux ]
-    ++ optionals stdenv.isDarwin [ hexdump ]
-    ++ optionals (stdenv.isDarwin && stdenv.isAarch64) [ autoSignDarwinBinariesHook ];
+    ++ optionals stdenv.isDarwin [ hexdump ];
 
   buildInputs = [ boost libevent miniupnpc zeromq zlib ];
 
