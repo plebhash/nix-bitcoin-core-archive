@@ -6,9 +6,7 @@ But sometimes, we need to run old or patched releases in a nix environment.
 
 `nix-bitcoin-core-archive` provides Nix derivations for:
 - old and outdated `bitcoin-core` releases
-- development forks 
-
-(e.g.: [`github.com/Sjors/bitcoin`](https://github.com/Sjors/bitcoin) for a SV2-patch TP)
+- development forks (e.g.: [`github.com/Sjors/bitcoin`](https://github.com/Sjors/bitcoin) for a SV2-patch TP)
 
 Note: `bitcoin-wallet` and `bitcoin-qt` are not yet supported by the derivations.
 
