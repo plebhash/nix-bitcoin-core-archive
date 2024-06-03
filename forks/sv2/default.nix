@@ -38,14 +38,16 @@ stdenv.mkDerivation rec {
     [ autoreconfHook pkg-config ]
     ++ optionals stdenv.isLinux [ util-linux ];
 
-  buildInputs = [ boost libevent miniupnpc zeromq zlib ];
+  buildInputs = [ boost libevent db48 sqlite miniupnpc zeromq zlib ];
 
   configureFlags = [
     "--with-boost-libdir=${boost.out}/lib"
     "--disable-bench"
-    "--disable-wallet"
     "--disable-tests"
     "--disable-gui-tests"
+    "--disable-fuzz"
+    "--disable-fuzz-binary"
+    "--disable-bench"
   ];
 
   checkInputs = [ python3 ];
