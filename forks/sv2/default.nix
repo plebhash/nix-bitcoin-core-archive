@@ -30,8 +30,8 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "Sjors";
     repo = "bitcoin";
-    rev = "sv2-tp-0.1.2";
-    hash = "sha256-ZNt9srJGf65Eh5yrI3kL4ldotfWKbKASxcWGIwZXvPE=";
+    rev = "3e83cd742c0e488be3752d623b70db2d57530ed0";
+    hash = "sha256-DDkbcbjIQSaQSTFeq5ZLW3xMyITgNQ6ncGEHQY98DNQ=";
   };
 
   nativeBuildInputs =
