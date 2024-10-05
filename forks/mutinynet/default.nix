@@ -40,11 +40,15 @@ nativeBuildInputs =
   [ autoreconfHook pkg-config intltool ]
   ++ optionals stdenv.isLinux [ util-linux ];
 
-  buildInputs = [ boost libevent miniupnpc zeromq zlib ];
+  buildInputs = [ boost db48 sqlite libevent miniupnpc zeromq zlib ];
 
   configureFlags = [
+    "--enable-wallet"
+    "--disable-fuzz"
+    "--disable-fuzz-binary"
     "--disable-tests"
     "--disable-gui-tests"
+    "--disable-bench"
   ];
 
   checkInputs = [ python3 ];
