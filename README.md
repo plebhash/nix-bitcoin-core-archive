@@ -78,6 +78,7 @@ bitcoin-cli  bitcoind  bitcoin-qt  bitcoin-tx  bitcoin-wallet
 
 # Custom Forks
 
+- [x] [SV2-IPC Patch by @Sjors](https://github.com/Sjors/bitcoin/tree/sv2-ipc) - v28.99.0
 - [x] [SV2 Patch by @Sjors](https://github.com/Sjors/bitcoin/tree/sv2) - v25.99.0
 - [x] [MutinyNet Patch by @benthecarman](https://github.com/benthecarman/bitcoin) - v24.99.0
 - [x] [CPUnet Patch by @braidpool](https://github.com/braidpool/bitcoin/tree/cpunet) - v27.99.0
