@@ -9,6 +9,8 @@
 , boost ? pkgs.boost
 , libevent ? pkgs.libevent
 , miniupnpc ? pkgs.miniupnpc
+# todo: blocked by https://github.com/NixOS/nixpkgs/issues/359902
+# , libmultiprocess ? pkgs.libmultiprocess
 , zeromq ? pkgs.zeromq
 , zlib ? pkgs.zlib
 , db48 ? pkgs.db48
@@ -30,22 +32,23 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "Sjors";
     repo = "bitcoin";
-    rev = "54b2da1b9a977a325a299c6fa7bdeba76452f2a8";
-    hash = "sha256-nyIcLYk4PHDDD/g6iZphctijHc3y8jGHF7d3Y5t8q58=";
+    rev = "b2ad32fb7cdda6e0d06f08320c4b1e1b17356bda";
+    hash = "sha256-+S+YBCssxxXe5CcGabhucEZ33iVMpDiGUHH+yKRPEZQ=";
   };
 
   nativeBuildInputs =
     [ cmake pkg-config ]
     ++ optionals stdenv.isLinux [ util-linux ];
 
-  buildInputs = [ boost libevent db48 sqlite miniupnpc zeromq zlib ];
+  buildInputs = [ libmultiprocess boost libevent db48 sqlite miniupnpc zeromq zlib ];
 
-  cmakeFlages = [
+  cmakeFlags = [
     "-DCMAKE_BUILD_TYPE=Release"
     "-DENABLE_WALLET=ON"
     "-DBUILD_TESTS=OFF"
     "-DSECP256K1_BUILD_TESTS=OFF"
     "-DWITH_SV2=ON"
+    "-DWITH_MULTIPROCESS=ON"
   ];
 
   checkInputs = [ python3 ];
