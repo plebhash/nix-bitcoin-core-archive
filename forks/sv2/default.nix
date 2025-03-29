@@ -2,7 +2,7 @@
 , lib ? pkgs.lib
 , stdenv ? pkgs.stdenv
 , fetchFromGitHub ? pkgs.fetchFromGitHub
-, autoreconfHook ? pkgs.autoreconfHook
+, cmake ? pkgs.cmake
 , pkg-config ? pkgs.pkg-config
 , util-linux ? pkgs.util-linux
 , hexdump ? pkgs.hexdump
@@ -20,7 +20,7 @@
 
 with lib;
 let
-  version = "v25.99.0";
+  version = "v28.99.0";
   majorVersion = versions.major version;
 in
 stdenv.mkDerivation rec {
@@ -30,24 +30,22 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "Sjors";
     repo = "bitcoin";
-    rev = "3e83cd742c0e488be3752d623b70db2d57530ed0";
-    hash = "sha256-DDkbcbjIQSaQSTFeq5ZLW3xMyITgNQ6ncGEHQY98DNQ=";
+    rev = "0dc95a8fdd1ef9b4334c1b19abf1796921e0f87e";
+    hash = "sha256-mqKo6BPyKUfwzqOBuPAUC7gEenkyePAjhXmTZvfxSok=";
   };
 
   nativeBuildInputs =
-    [ autoreconfHook pkg-config ]
+    [ cmake pkg-config ]
     ++ optionals stdenv.isLinux [ util-linux ];
 
   buildInputs = [ boost libevent db48 sqlite miniupnpc zeromq zlib ];
 
-  configureFlags = [
-    "--with-boost-libdir=${boost.out}/lib"
-    "--disable-bench"
-    "--disable-tests"
-    "--disable-gui-tests"
-    "--disable-fuzz"
-    "--disable-fuzz-binary"
-    "--disable-bench"
+  cmakeFlags = [
+    "-DCMAKE_BUILD_TYPE=Release"
+    "-DENABLE_WALLET=ON"
+    "-DBUILD_TESTS=OFF"
+    "-DSECP256K1_BUILD_TESTS=OFF"
+    "-DWITH_SV2=ON"
   ];
 
   checkInputs = [ python3 ];
