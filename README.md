@@ -82,3 +82,4 @@ bitcoin-cli  bitcoind  bitcoin-qt  bitcoin-tx  bitcoin-wallet
 - [x] [SV2 Patch by @Sjors](https://github.com/Sjors/bitcoin/tree/sv2) - v25.99.0
 - [x] [MutinyNet Patch by @benthecarman](https://github.com/benthecarman/bitcoin) - v24.99.0
 - [x] [CPUnet Patch by @braidpool](https://github.com/braidpool/bitcoin/tree/cpunet) - v27.99.0
+- [x] [Bitcoin FIBRE by @bitcoinfibre](https://github.com/bitcoinfibre/bitcoinfibre) - mapped Core release `30.0` (`v30.0-fibre`); release metadata is configurable in `forks/bitcoinfibre/default.nix`
