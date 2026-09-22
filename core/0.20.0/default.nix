@@ -3,7 +3,7 @@
 , stdenv ? pkgs.stdenv
 , fetchurl ? pkgs.fetchurl
 , autoreconfHook ? pkgs.autoreconfHook
-, pkg-config ? pkgs.pkg-config
+, pkg-config ? (pkgs."pkg-config" or pkgs.pkgconfig)
 , util-linux ? (pkgs."util-linux" or pkgs.utillinux)
 , boost ? pkgs.boost
 , libevent ? pkgs.libevent

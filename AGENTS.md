@@ -36,7 +36,7 @@ than one batch at a time.
 | v29.0 – v31.1 | 25.05 | needs `libsodium` as an explicit buildInput (see leak below) |
 | v0.13.0 – v0.21.2 | 20.09 | last channel where qt4-era deps line up |
 | v0.9.0 – v0.12.1 | **16.09** | 0.9.x `rpcserver.cpp` uses the 2-arg asio `basic_socket_acceptor<Protocol, Service>`, removed in boost ≥ 1.65; 16.09 ships boost 1.60 |
-| v0.1.5 – v0.8.6 | **16.09** | gcc-5 + C++03 code; `wxGTK29` still exists here for the wx-GUI era (0.2.x–0.4.x); newer channels' wx2.9 headers require C++11 |
+| v0.1.5 – v0.8.6 | **16.09** + gcc49 | C++03 code + `wxGTK29` (0.2.x–0.4.x GUI era); the derivations override `stdenv` to `cc = pkgs.gcc49` (with `wx29`/`boost`/`db48` following it) — gcc-5's stricter template deduction breaks this code (e.g. `serialize.h` `min()`); newer channels' wx2.9 headers require C++11 |
 
 Launch pattern:
 
