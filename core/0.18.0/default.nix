@@ -1,0 +1,49 @@
+{ pkgs ? import <nixpkgs> { system = builtins.currentSystem; }
+, lib ? pkgs.lib
+, stdenv ? pkgs.stdenv
+, fetchurl ? pkgs.fetchurl
+, autoreconfHook ? pkgs.autoreconfHook
+, pkg-config ? pkgs.pkg-config
+, util-linux ? (pkgs."util-linux" or pkgs.utillinux)
+, boost ? pkgs.boost
+, libevent ? pkgs.libevent
+, miniupnpc ? pkgs.miniupnpc
+, zeromq ? pkgs.zeromq
+, zlib ? pkgs.zlib
+, db48 ? pkgs.db48, openssl ? pkgs.openssl
+}:
+
+with lib;
+let
+  version = "0.18.0";
+in
+stdenv.mkDerivation rec {
+  pname = "bitcoind";
+  inherit version;
+
+  src = fetchurl {
+    urls = [
+      "https://bitcoincore.org/bin/bitcoin-core-0.18.0/bitcoin-0.18.0.tar.gz"
+    ];
+    sha256 = "5e4e6890e07b620a93fdb24605dae2bb53e8435b2a93d37558e1db1913df405f";
+  };
+
+  nativeBuildInputs =
+    [ autoreconfHook pkg-config ]
+    ++ optionals stdenv.isLinux [ util-linux ];
+
+  buildInputs = [ boost libevent zeromq zlib miniupnpc db48 openssl ];
+
+  configureFlags = [
+    "--disable-bench"
+    "--disable-tests"
+    "--disable-gui"
+    "--with-boost-libdir=${boost.out}/lib"
+  ];
+
+  meta = {
+    description = "Bitcoin Core 0.18.0";
+    license = licenses.mit;
+    platforms = platforms.linux;
+  };
+}

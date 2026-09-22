@@ -4,8 +4,7 @@
 , fetchurl ? pkgs.fetchurl
 , autoreconfHook ? pkgs.autoreconfHook
 , pkg-config ? pkgs.pkg-config
-, util-linux ? pkgs.util-linux
-, hexdump ? pkgs.hexdump
+, util-linux ? (pkgs."util-linux" or pkgs.utillinux)
 , boost ? pkgs.boost
 , libevent ? pkgs.libevent
 , miniupnpc ? pkgs.miniupnpc
