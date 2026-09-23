@@ -14,7 +14,10 @@ But sometimes, we need to run old or patched releases in a nix environment.
 - old and outdated `bitcoin-core` releases
 - custom forks
 
-Note: `darwin` is not yet supported. Derivarions are only tested on Linux.
+## limitations
+
+- arch: `x86-64` only
+- kernel: `linux` only
 
 ## instructions
 
