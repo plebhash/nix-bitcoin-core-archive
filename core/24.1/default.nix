@@ -28,6 +28,10 @@ stdenv.mkDerivation rec {
     sha256 = "8a0a3db3b2d9cc024e897113f70a3a65d8de831c129eb6d1e26ffa65e7bfaf4e";
   };
 
+  patchPhase = ''
+    # gcc-12+ no longer transitively provides <cstdint> to this header
+    sed -i 's|#include <memory>|#include <cstdint>\n#include <memory>|' src/chainparamsbase.h
+  '';
   nativeBuildInputs =
     [ autoreconfHook pkg-config ]
     ++ optionals stdenv.isLinux [ util-linux ];
