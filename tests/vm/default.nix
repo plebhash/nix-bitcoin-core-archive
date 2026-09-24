@@ -210,7 +210,10 @@ let
         sleep 1
         rpc=$(curl -s -u archive:archive http://127.0.0.1:18443/ \
               -d '{"method":"getblockcount"}' 2>/dev/null) || rpc=""
-        [ -n "$rpc" ] && break
+        # only a genuine result:0 ends the loop: a -28 "Loading
+        # wallet" warmup error must keep polling, not break (it
+        # orphans a daemon that -stop cannot kill during warmup)
+        case "$rpc" in *'"result":0'*) break ;; esac
         i=$((i+1))
       done
       case "$rpc" in
@@ -233,8 +236,10 @@ let
           else
             echo "SKIP-RPC $ver: rpc getblockcount: $rpc"
           fi
-          "$b" -stop -datadir="$d" \
-            -rpcuser=archive -rpcpassword=archive >/dev/null 2>&1
+          # RPC -stop is a no-op while the daemon is still in warmup
+          # (-28 rejects every command), so kill it by datadir
+          pkill -f "datadir=$d" 2>/dev/null
+          sleep 2   # let the RPC port be released for the next version
           rm -rf "$d" "$d.err" 2>/dev/null
           return 1
           ;;
