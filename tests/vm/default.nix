@@ -2,11 +2,13 @@
 #
 ## Boots a virtual machine containing every version's derivation (each
 ## evaluated with the nixpkgs generation of its era) and runs a check
-## script that proves each release works:
-##
 ##   0.1.5        source-only artifact  -> file presence
-##   0.2.0-0.8.6  pre-RPC era           -> `bitcoind -version`
-##   0.9.0-0.12.1 early RPC era         -> -version, regtest RPC best-effort
+##   0.2.0-0.4.0  pre-RPC GUI era       -> binary starts on a virtual
+##                                          display (Xvfb): output or
+##                                          surviving the 5 s cap
+##   0.5.0-0.12.1 pre-RPC era           -> binary links and runs:
+##                                          output or surviving the
+##                                          5 s cap (fresh datadir)
 ##   0.13.0-31.1  stable RPC era        -> -version + regtest RPC
 ##                                          round-trip (strict)
 ##
@@ -88,13 +90,15 @@ let
 
     run_cap() {
       # run_cap SECS BIN ARGS... — captures up to 5 lines of the
-      # binary's output. Output goes to a file, never a pipe: a binary
-      # that forks a child surviving `timeout` would hold the pipe's
-      # write end open forever and the command substitution would hang
-      # the runner (observed on 0.2.1: the gui binary's child survived
-      # the TERM and the suite stalled 11+ min with no progress).
-      # -k 5 escalates TERM to KILL after 5 s, so a binary stuck in a
-      # signal handler is reaped too.
+      # binary's output and returns the binary's exit status. Output
+      # goes to a file, never a pipe: a binary that forks a child
+      # surviving `timeout` would hold the pipe's write end open
+      # forever and the command substitution would hang the runner
+      # (observed on 0.2.1: the gui binary's child survived the TERM
+      # and the suite stalled 11+ min with no progress). -k 5
+      # escalates TERM to KILL after 5 s, so a binary stuck in a
+      # signal handler is reaped too. rc=124 means the binary was
+      # still running at the cap (survived).
       t="$1"; b="$2"; shift 2
       f=$(mktemp /tmp/cap.XXXXXX)
       if [ "$t" -gt 0 ]; then
@@ -102,33 +106,39 @@ let
       else
         "$b" "$@" >"$f" 2>&1
       fi
+      rc=$?
       head -5 "$f"
       rm -f "$f"
+      return "$rc"
     }
 
     do_version() {
-      ver="$1"; out="$2"; mode="$${3:-ver}"
+      ver="$1"; out="$2"; mode="$3"; [ -z "$mode" ] && mode=ver
       b=$(bin_of "$out")
       if [ -z "$b" ] || [ ! -x "$b" ]; then
-        echo "FAIL $ver: no binary in $out/bin"; fail=1; return
+        echo "FAIL $ver: no binary in $out/bin"; fail=1; return 1
       fi
       if [ "$mode" = "early" ]; then
-        # v0.5.0-v0.12.1 predate the -version flag: any arg makes the
-        # binary attempt a node start, which prints the
-        # rpcpassword diagnostic. That marker proves it links and runs.
-        # timeout: the binary then keeps running in the foreground
-        # (unknown -version arg).
-        o=$(run_cap 20 "$b" -version)
-        if printf '%s' "$o" | grep -q 'rpcpassword'; then
-          echo "OK $ver: binary runs (pre- -version-flag era)"
+        # v0.5.0-v0.12.1: output across this era is inconsistent —
+        # some versions print an rpcpassword diagnostic and exit,
+        # others (0.6.0) start silently and run on. The check is
+        # therefore "links and runs": any output OR surviving the
+        # 5 s cap. A fresh datadir avoids cross-version wallet locks.
+        d=$(mktemp -d /tmp/btc-XXXXXX)
+        o=$(run_cap 5 "$b" -version -datadir="$d"); rc=$?
+        rm -rf "$d"
+        if [ -n "$o" ] || [ "$rc" = "124" ]; then
+          echo "OK $ver: binary runs (pre-RPC era)"
         else
-          echo "FAIL $ver: no startup diagnostic from binary"; fail=1; return
+          echo "FAIL $ver: binary produced no output and did not survive (rc=$rc): $(printf '%s' "$o" | head -1)"
+          fail=1; return 1
         fi
-        return
+        return 0
       fi
-      o=$(run_cap 20 "$b" -version)
+      o=$(run_cap 20 "$b" -version); rc=$?
       if ! printf '%s' "$o" | grep -q "$ver"; then
-        echo "FAIL $ver: -version output does not contain $ver"; fail=1; return
+        echo "FAIL $ver: -version output does not contain $ver (rc=$rc): $(printf '%s' "$o" | head -3 | tr '\n' '|')"
+        fail=1; return 1
       fi
       echo "OK $ver: $(printf '%s\n' "$o" | head -1)"
     }
@@ -138,48 +148,60 @@ let
       if [ -f "$out/src/main.cpp" ]; then
         echo "OK $ver: source tree present"
       else
-        echo "FAIL $ver: src/main.cpp missing"; fail=1
+        echo "FAIL $ver: src/main.cpp missing"; fail=1; return 1
       fi
     }
     do_gui() {
       ver="$1"; out="$2"
       b=$(bin_of "$out")
       if [ -z "$b" ] || [ ! -x "$b" ]; then
-        echo "FAIL $ver: no binary in $out/bin"; fail=1; return
+        echo "FAIL $ver: no binary in $out/bin"; fail=1; return 1
       fi
       # v0.2.x-v0.4.x: single wx-GUI+node binary, no -version flag.
-      # Headless VM: wx init fails on the missing X display; any output
-      # from the short run proves the binary links and starts.
-      o=$(run_cap 20 "$b" -printtoconsole)
-      if [ -n "$o" ]; then
-        echo "OK $ver: binary runs (gui era, no -version flag)"
+      # Headless VM: wx needs an X server, so run under Xvfb. The
+      # check is "links and runs": the app keeps running on the
+      # virtual display (rc=124 at the 5 s cap); a broken binary
+      # (missing library, crash) exits early with no usable output.
+      d=$(mktemp -d /tmp/btc-XXXXXX)
+      Xvfb :99 >/dev/null 2>&1 &
+      xpid=$!
+      sleep 1
+      o=$(DISPLAY=:99 run_cap 5 "$b" -datadir="$d"); rc=$?
+      kill "$xpid" >/dev/null 2>&1
+      rm -rf "$d"
+      if [ -n "$o" ] || [ "$rc" = "124" ]; then
+        echo "OK $ver: gui binary runs (headless X)"
       else
-        echo "FAIL $ver: gui binary produced no output"; fail=1
+        echo "FAIL $ver: gui binary produced no output and did not survive (rc=$rc): $(printf '%s' "$o" | head -1)"
+        fail=1; return 1
       fi
     }
 
     do_rpc() {
       strict="$1"; ver="$2"; out="$3"
       case "$ver" in
-        # pre-0.13: no -regtest flag; the startup-marker check is the
-        # whole check for these versions.
-        0.*) do_version "$ver" "$out" early; return ;;
-        *) do_version "$ver" "$out" || return ;;
+        # pre-0.13: no -regtest flag; the startup check is the whole
+        # check for these versions.
+        0.*) do_version "$ver" "$out" early || return 1 ;;
+        *) do_version "$ver" "$out" || return 1 ;;
       esac
       b=$(bin_of "$out")
       d=$(mktemp -d /tmp/btc-XXXXXX)
-      # timeout: pre-0.13 binaries do not know -regtest; a warning-only
-      # parse can leave them running in the foreground forever.
-      timeout 30 "$b" -regtest -daemon -datadir="$d" -server \
+      # -k 5: a binary that ignores TERM is killed, so a foreground
+      # hang cannot stall the suite. Daemon stderr is kept so a
+      # failed start is diagnosable from the build log.
+      timeout 30 -k 5 "$b" -regtest -daemon -datadir="$d" -server \
         -rpcuser=archive -rpcpass=archive -rpcport=18443 \
-        -rpcbind=127.0.0.1 >/dev/null 2>&1
+        -rpcbind=127.0.0.1 2>"$d.err"
       if [ "$?" -ne 0 ]; then
+        dbg=$(tail -3 "$d.err" 2>/dev/null | tr '\n' '|')
         if [ "$strict" = "1" ]; then
-          echo "FAIL $ver: regtest daemon did not start"; fail=1
+          echo "FAIL $ver: regtest daemon did not start: $dbg"; fail=1
         else
-          echo "SKIP-RPC $ver: daemon did not start (flag era)"
+          echo "SKIP-RPC $ver: daemon did not start (flag era): $dbg"
         fi
-        rm -rf "$d"; return
+        rm -rf "$d" "$d.err" 2>/dev/null
+        return 1
       fi
       rpc=""
       i=0
@@ -212,7 +234,8 @@ let
           fi
           "$b" -stop -datadir="$d" \
             -rpcuser=archive -rpcpass=archive >/dev/null 2>&1
-          rm -rf "$d"
+          rm -rf "$d" "$d.err" 2>/dev/null
+          return 1
           ;;
       esac
     }
@@ -265,6 +288,9 @@ let
           runnerPkg
           pkgs.curl
           pkgs.psmisc
+          # GUI era (0.2.x-0.4.x) needs an X server in the headless
+          # guest.
+          pkgs.xorg.xvfb
         ];
     };
 
@@ -308,6 +334,10 @@ let
       # grep -c exits 1 on zero matches, which set -e would kill;
       # `|| true` keeps the count and the exit status. The strict ok
       # count catches a runner that died early without emitting FAIL.
+      # Dump the full per-version result into the build log before the
+      # pass/fail gate, so a failed run is diagnosable from the log
+      # alone (the guest is gone afterwards).
+      machine.succeed("cat /tmp/runner.out")
       machine.succeed(
           "ok=$(grep -c '^OK' /tmp/runner.out || true); "
           "sk=$(grep -c '^SKIP-RPC' /tmp/runner.out || true); "
