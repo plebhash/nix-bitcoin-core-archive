@@ -86,6 +86,26 @@ let
       echo "$b"
     }
 
+    run_cap() {
+      # run_cap SECS BIN ARGS... — captures up to 5 lines of the
+      # binary's output. Output goes to a file, never a pipe: a binary
+      # that forks a child surviving `timeout` would hold the pipe's
+      # write end open forever and the command substitution would hang
+      # the runner (observed on 0.2.1: the gui binary's child survived
+      # the TERM and the suite stalled 11+ min with no progress).
+      # -k 5 escalates TERM to KILL after 5 s, so a binary stuck in a
+      # signal handler is reaped too.
+      t="$1"; b="$2"; shift 2
+      f=$(mktemp /tmp/cap.XXXXXX)
+      if [ "$t" -gt 0 ]; then
+        timeout "$t" -k 5 "$b" "$@" >"$f" 2>&1
+      else
+        "$b" "$@" >"$f" 2>&1
+      fi
+      head -5 "$f"
+      rm -f "$f"
+    }
+
     do_version() {
       ver="$1"; out="$2"; mode="$${3:-ver}"
       b=$(bin_of "$out")
@@ -97,8 +117,8 @@ let
         # binary attempt a node start, which prints the
         # rpcpassword diagnostic. That marker proves it links and runs.
         # timeout: the binary then keeps running in the foreground
-        # (unknown -version arg); head closes the pipe after the marker.
-        o=$(timeout 20 "$b" -version 2>&1 | head -5)
+        # (unknown -version arg).
+        o=$(run_cap 20 "$b" -version)
         if printf '%s' "$o" | grep -q 'rpcpassword'; then
           echo "OK $ver: binary runs (pre- -version-flag era)"
         else
@@ -106,10 +126,11 @@ let
         fi
         return
       fi
-      if ! "$b" -version | grep -q "$ver"; then
+      o=$(run_cap 20 "$b" -version)
+      if ! printf '%s' "$o" | grep -q "$ver"; then
         echo "FAIL $ver: -version output does not contain $ver"; fail=1; return
       fi
-      echo "OK $ver: $($b -version | head -1)"
+      echo "OK $ver: $(printf '%s\n' "$o" | head -1)"
     }
 
     do_src() {
@@ -129,7 +150,7 @@ let
       # v0.2.x-v0.4.x: single wx-GUI+node binary, no -version flag.
       # Headless VM: wx init fails on the missing X display; any output
       # from the short run proves the binary links and starts.
-      o=$(timeout 20 "$b" -printtoconsole 2>&1 | head -3)
+      o=$(run_cap 20 "$b" -printtoconsole)
       if [ -n "$o" ]; then
         echo "OK $ver: binary runs (gui era, no -version flag)"
       else
