@@ -25,10 +25,16 @@ let
   lib = pkgs.lib;
 
   # The archive: every version directory under ../../core (sorted).
+  # Only real directories are versions — core/ also holds vm.nix (the
+  # fleet) and _deps/, which are not releases. readDir entries are a
+  # string on some nix versions and a { type } set on others.
+  isDirEntry = e:
+    if builtins.isAttrs e then e.type == "directory" else e == "directory";
   versions = builtins.attrNames (lib.listToAttrs (lib.map (v: { name = v; value = v; }) (
-    lib.filter (d: d != "_deps") (builtins.attrNames (builtins.readDir ../../core))
+    let
+      cd = builtins.readDir ../../core;
+    in lib.filter (d: d != "_deps" && isDirEntry cd.${d}) (builtins.attrNames cd)
   )));
-
   kindOf = version:
     if version == "0.1.5" then "src"
     else if lib.versionOlder version "0.5.0" then "gui"      # 0.2.x-0.4.x: wx GUI, single `bitcoin` binary, no -version flag
@@ -244,16 +250,19 @@ let
     # The test driver is Python: run the full check suite, then fail
     # the test if any result line is FAIL — the failing command's
     # output (the FAIL lines) lands in the nix build log.
-    # The runner needs well over 900 s (137 versions, regtest daemon
-    # start/stop per version), so it is launched in the background and
-    # the driver polls for its exit (wait_until_succeeds takes an
-    # explicit timeout; makeTest has no timeout parameter in 25.05).
-    globalTimeout = 5400;
+    # The runner needs well over 90 minutes in the worst case (137
+    # versions, regtest daemon start/stop per version; the 2026-09-22
+    # full run ran 88+ minutes and did not finish), so it is launched
+    # in the background, its output is teed to /dev/console (visible
+    # in the build log as per-version progress), and the driver polls
+    # for its exit (wait_until_succeeds takes an explicit timeout;
+    # makeTest has no timeout parameter in 25.05).
+    globalTimeout = 21600;
 
     testScript = ''
       start_all()
-      machine.succeed("nohup ${runnerPkg.outPath}/bin/archive-runner 2>&1 | tee /tmp/runner.out &")
-      machine.wait_until_succeeds("! pgrep -f 'archive-[r]unner' >/dev/null", timeout=5000)
+      machine.succeed("nohup ${runnerPkg.outPath}/bin/archive-runner 2>&1 | tee /tmp/runner.out /dev/console &")
+      machine.wait_until_succeeds("! pgrep -f 'archive-[r]unner' >/dev/null", timeout=20400)
       machine.succeed(
           "ok=$(grep -c '^OK' /tmp/runner.out); "
           "sk=$(grep -c '^SKIP-RPC' /tmp/runner.out); "
