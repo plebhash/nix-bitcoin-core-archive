@@ -190,7 +190,7 @@ let
       # -k 5: a binary that ignores TERM is killed, so a foreground
       # hang cannot stall the suite. Daemon stderr is kept so a
       # failed start is diagnosable from the build log.
-      timeout 30 -k 5 "$b" -regtest -daemon -datadir="$d" -server \
+      timeout -k 5 30 "$b" -regtest -daemon -datadir="$d" -server \
         -rpcuser=archive -rpcpass=archive -rpcport=18443 \
         -rpcbind=127.0.0.1 2>"$d.err"
       if [ "$?" -ne 0 ]; then
@@ -334,10 +334,14 @@ let
       # grep -c exits 1 on zero matches, which set -e would kill;
       # `|| true` keeps the count and the exit status. The strict ok
       # count catches a runner that died early without emitting FAIL.
-      # Dump the full per-version result into the build log before the
-      # pass/fail gate, so a failed run is diagnosable from the log
-      # alone (the guest is gone afterwards).
-      machine.succeed("cat /tmp/runner.out")
+      # Log every non-OK line (with diagnostics) when the run has
+      # failures; a green run emits nothing. The driver only records
+      # the output of failed commands, so this is what makes the
+      # full per-version verdict list visible in the build log.
+      machine.succeed(
+          "out=$(grep -vE '^OK' /tmp/runner.out || true); "
+          "if [ -n \"$out\" ]; then printf '%s\\n' \"$out\"; exit 1; fi"
+      )
       machine.succeed(
           "ok=$(grep -c '^OK' /tmp/runner.out || true); "
           "sk=$(grep -c '^SKIP-RPC' /tmp/runner.out || true); "
