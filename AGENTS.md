@@ -164,6 +164,13 @@ only, not data. Real protection = one store path per line in
   build and pass the era's smoke check (see the ladder below).
 - Local author conventions (who signs, what identity to commit as)
   live in AGENTS_CUSTOM.md; otherwise follow the existing git history.
+- NEVER commit private keys or credentials. The fleet ssh keypair
+  (`fleet-keys/`) is git-ignored and generated locally (`ssh-keygen -t
+  ed25519 -N "" -C fleet -f fleet-keys/id_ed25519`); `core/vm.nix`
+  reads it via `FLEET_KEYS` (default `./fleet-keys`). If a key ever
+  lands in history, rewrite the commits before anything is pushed —
+  history here is local-only (the build host is a tar mirror, not a
+  git push).
 
 ## Verification ladder (fast → thorough)
 
