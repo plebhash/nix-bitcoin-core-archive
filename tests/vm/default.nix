@@ -253,23 +253,47 @@ let
     # The runner needs well over 90 minutes in the worst case (137
     # versions, regtest daemon start/stop per version; the 2026-09-22
     # full run ran 88+ minutes and did not finish), so it is launched
-    # in the background, its output is teed to /dev/console (visible
-    # in the build log as per-version progress), and the driver polls
-    # for its exit (wait_until_succeeds takes an explicit timeout;
-    # makeTest has no timeout parameter in 25.05).
+    # in the background with its output redirected to a file — NOT
+    # teed: the driver's execute() blocks until every writer of its
+    # output pipe has exited, and a backgrounded tee holds the pipe's
+    # write end open for the whole suite (verified: with tee, the
+    # launch command "finished" exactly when the runner did). Progress
+    # is made visible by polling the tail of the output file every 90 s
+    # and logging it; tee to /dev/console is invisible, because the
+    # guest's /dev/console is tty0 (the last console= on the kernel
+    # command line), not serial0, and with -nographic the display goes
+    # nowhere (verified: marker lines never reached the build log).
     globalTimeout = 21600;
 
     testScript = ''
       start_all()
-      machine.succeed("nohup ${runnerPkg.outPath}/bin/archive-runner 2>&1 | tee /tmp/runner.out /dev/console &")
-      machine.wait_until_succeeds("! pgrep -f 'archive-[r]unner' >/dev/null", timeout=20400)
+      # Redirect before exec so the backgrounded process holds no write
+      # end of the driver's output pipe (see the comment above).
+      machine.succeed("nohup ${runnerPkg.outPath}/bin/archive-runner > /tmp/runner.out 2>&1 &")
+      # Poll every 90 s in the guest: sleep, echo the output so far, then
+      # exit non-zero while the runner is alive. The [r] keeps pgrep from
+      # matching the wrapper shell whose cmdline holds the literal
+      # pattern.
+      while True:
+          status, tail = machine.execute(
+              "sleep 90; "
+              "tail -n 25 /tmp/runner.out; "
+              "pgrep -f 'archive-[r]unner' >/dev/null && exit 1 || exit 0",
+              timeout=300,
+          )
+          machine.log("PROGRESS: " + tail.rstrip())
+          if status == 0:
+              break
+      # grep -c exits 1 on zero matches, which set -e would kill;
+      # `|| true` keeps the count and the exit status. The strict ok
+      # count catches a runner that died early without emitting FAIL.
       machine.succeed(
-          "ok=$(grep -c '^OK' /tmp/runner.out); "
-          "sk=$(grep -c '^SKIP-RPC' /tmp/runner.out); "
-          "fl=$(grep -c '^FAIL' /tmp/runner.out); "
+          "ok=$(grep -c '^OK' /tmp/runner.out || true); "
+          "sk=$(grep -c '^SKIP-RPC' /tmp/runner.out || true); "
+          "fl=$(grep -c '^FAIL' /tmp/runner.out || true); "
           "echo SUMMARY: ok=$ok skip-rpc=$sk fail=$fl total=$((ok+sk+fl)); "
           "grep -v '^OK' /tmp/runner.out | tail -30; "
-          "if [ \"$fl\" -gt 0 ]; then exit 1; fi"
+          "if [ \"$fl\" -gt 0 ] || [ \"$ok\" -lt ${toString (builtins.length versions)} ]; then exit 1; fi"
       )
       machine.shutdown()
     '';
