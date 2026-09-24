@@ -30,49 +30,143 @@ bitcoin-cli  bitcoind  bitcoin-qt  bitcoin-tx  bitcoin-wallet
 
 # Bitcoin Core
 
- - [ ] Bitcoin Core v25.1
- - [ ] Bitcoin Core v25.0
- - [ ] Bitcoin Core v24.2
- - [ ] Bitcoin Core v24.1
- - [ ] Bitcoin Core v24.0.1
- - [ ] Bitcoin Core v23.2
- - [ ] Bitcoin Core v23.1
- - [ ] Bitcoin Core v23.0
- - [ ] Bitcoin Core v22.1
- - [x] Bitcoin Core v22.0
- - [ ] Bitcoin Core v0.21.2
- - [ ] Bitcoin Core v0.21.1
- - [x] Bitcoin Core v0.21.0
- - [ ] Bitcoin Core v0.20.2
- - [ ] Bitcoin Core v0.20.1
- - [ ] Bitcoin Core v0.20.0
- - [ ] Bitcoin Core v0.19.1
- - [ ] Bitcoin Core v0.19.0.1
- - [ ] Bitcoin Core v0.18.1
- - [ ] Bitcoin Core v0.18.0
- - [ ] Bitcoin Core v0.17.1
- - [ ] Bitcoin Core v0.17.0.1
- - [ ] Bitcoin Core v0.17.0
- - [ ] Bitcoin Core v0.16.3
- - [ ] Bitcoin Core v0.16.2
- - [ ] Bitcoin Core v0.16.1
- - [ ] Bitcoin Core v0.16.0
- - [ ] Bitcoin Core v0.15.2
- - [ ] Bitcoin Core v0.15.1
- - [ ] Bitcoin Core v0.15.0.1
- - [ ] Bitcoin Core v0.15.0
- - [ ] Bitcoin Core v0.14.3
- - [ ] Bitcoin Core v0.14.2
- - [ ] Bitcoin Core v0.14.1
- - [ ] Bitcoin Core v0.14.0
- - [ ] Bitcoin Core v0.13.2
- - [ ] Bitcoin Core v0.13.1
- - [ ] Bitcoin Core v0.13.0
- - [ ] Bitcoin Core v0.12.1
- - [ ] Bitcoin Core v0.12.0
- - [ ] Bitcoin Core v0.11.2
- - [ ] Bitcoin Core v0.11.1
- - [ ] Bitcoin Core v0.11.0
+- [x] Bitcoin Core v31.1
+- [x] Bitcoin Core v31.0
+- [x] Bitcoin Core v30.3
+- [x] Bitcoin Core v30.2
+- [x] Bitcoin Core v30.1
+- [x] Bitcoin Core v30.0
+- [x] Bitcoin Core v29.4
+- [x] Bitcoin Core v29.3
+- [x] Bitcoin Core v29.2
+- [x] Bitcoin Core v29.1
+- [x] Bitcoin Core v29.0
+- [x] Bitcoin Core v28.4
+- [x] Bitcoin Core v28.3
+- [x] Bitcoin Core v28.2
+- [x] Bitcoin Core v28.1
+- [x] Bitcoin Core v28.0
+- [x] Bitcoin Core v27.2
+- [x] Bitcoin Core v27.1
+- [x] Bitcoin Core v27.0
+- [x] Bitcoin Core v26.2
+- [x] Bitcoin Core v26.1
+- [x] Bitcoin Core v26.0
+- [x] Bitcoin Core v25.2
+- [x] Bitcoin Core v25.1
+- [x] Bitcoin Core v25.0
+- [x] Bitcoin Core v24.2
+- [x] Bitcoin Core v24.1
+- [x] Bitcoin Core v24.0.1
+- [x] Bitcoin Core v24.0
+- [x] Bitcoin Core v23.2
+- [x] Bitcoin Core v23.1
+- [x] Bitcoin Core v23.0
+- [x] Bitcoin Core v22.1
+- [x] Bitcoin Core v22.0
+- [x] Bitcoin Core v0.21.2
+- [x] Bitcoin Core v0.21.1
+- [x] Bitcoin Core v0.21.0
+- [x] Bitcoin Core v0.20.2
+- [x] Bitcoin Core v0.20.1
+- [x] Bitcoin Core v0.20.0
+- [x] Bitcoin Core v0.19.2
+- [x] Bitcoin Core v0.19.1
+- [x] Bitcoin Core v0.19.0.1
+- [x] Bitcoin Core v0.19.0
+- [x] Bitcoin Core v0.18.1
+- [x] Bitcoin Core v0.18.0
+- [x] Bitcoin Core v0.17.2
+- [x] Bitcoin Core v0.17.1
+- [x] Bitcoin Core v0.17.0.1
+- [x] Bitcoin Core v0.17.0
+- [x] Bitcoin Core v0.16.3
+- [x] Bitcoin Core v0.16.2
+- [x] Bitcoin Core v0.16.1
+- [x] Bitcoin Core v0.16.0
+- [x] Bitcoin Core v0.15.2
+- [x] Bitcoin Core v0.15.1
+- [x] Bitcoin Core v0.15.0.1
+- [x] Bitcoin Core v0.15.0
+- [x] Bitcoin Core v0.14.3
+- [x] Bitcoin Core v0.14.2
+- [x] Bitcoin Core v0.14.1
+- [x] Bitcoin Core v0.14.0
+- [x] Bitcoin Core v0.13.2
+- [x] Bitcoin Core v0.13.1
+- [x] Bitcoin Core v0.13.0
+- [x] Bitcoin Core v0.12.1
+- [x] Bitcoin Core v0.12.0
+- [x] Bitcoin Core v0.11.3
+- [x] Bitcoin Core v0.11.2
+- [x] Bitcoin Core v0.11.1
+- [x] Bitcoin Core v0.11.0
+- [x] Bitcoin Core v0.10.4
+- [x] Bitcoin Core v0.10.3
+- [x] Bitcoin Core v0.10.2
+- [x] Bitcoin Core v0.10.1
+- [x] Bitcoin Core v0.10.0
+- [x] Bitcoin Core v0.9.5
+- [x] Bitcoin Core v0.9.4
+- [x] Bitcoin Core v0.9.3
+- [x] Bitcoin Core v0.9.2.1
+- [x] Bitcoin Core v0.9.2
+- [x] Bitcoin Core v0.9.1
+- [x] Bitcoin Core v0.9.0
+- [x] Bitcoin Core v0.8.6
+- [x] Bitcoin Core v0.8.5
+- [x] Bitcoin Core v0.8.4
+- [x] Bitcoin Core v0.8.3
+- [x] Bitcoin Core v0.8.2
+- [x] Bitcoin Core v0.8.1
+- [x] Bitcoin Core v0.8.0
+- [x] Bitcoin Core v0.7.2
+- [x] Bitcoin Core v0.7.1
+- [x] Bitcoin Core v0.7.0
+- [x] Bitcoin Core v0.6.3
+- [x] Bitcoin Core v0.6.2
+- [x] Bitcoin Core v0.6.1
+- [x] Bitcoin Core v0.6.0
+- [x] Bitcoin Core v0.5.3
+- [x] Bitcoin Core v0.5.2
+- [x] Bitcoin Core v0.5.1
+- [x] Bitcoin Core v0.5.0
+- [x] Bitcoin Core v0.4.0
+- [x] Bitcoin Core v0.3.24
+- [x] Bitcoin Core v0.3.23
+- [x] Bitcoin Core v0.3.22
+- [x] Bitcoin Core v0.3.21
+- [x] Bitcoin Core v0.3.20.2
+- [x] Bitcoin Core v0.3.20.1
+- [x] Bitcoin Core v0.3.20
+- [x] Bitcoin Core v0.3.19
+- [x] Bitcoin Core v0.3.18
+- [x] Bitcoin Core v0.3.17
+- [x] Bitcoin Core v0.3.15
+- [x] Bitcoin Core v0.3.14
+- [x] Bitcoin Core v0.3.13
+- [x] Bitcoin Core v0.3.12
+- [x] Bitcoin Core v0.3.10
+- [x] Bitcoin Core v0.3.8
+- [x] Bitcoin Core v0.3.7
+- [x] Bitcoin Core v0.3.6
+- [x] Bitcoin Core v0.3.3
+- [x] Bitcoin Core v0.3.2
+- [x] Bitcoin Core v0.3.1
+- [x] Bitcoin Core v0.3.0
+- [x] Bitcoin Core v0.2.13
+- [x] Bitcoin Core v0.2.12
+- [x] Bitcoin Core v0.2.11
+- [x] Bitcoin Core v0.2.10
+- [x] Bitcoin Core v0.2.9
+- [x] Bitcoin Core v0.2.8
+- [x] Bitcoin Core v0.2.7
+- [x] Bitcoin Core v0.2.6
+- [x] Bitcoin Core v0.2.5
+- [x] Bitcoin Core v0.2.4
+- [x] Bitcoin Core v0.2.2
+- [x] Bitcoin Core v0.2.0
+- [x] Bitcoin Core v0.1.5
 
 ---
 

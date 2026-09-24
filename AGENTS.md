@@ -15,8 +15,10 @@ the user's daily system — keep it untouched). They run on the build host:
 - Repo mirror: a checkout of this repo on the build host.
 - Mirror it after local edits (sync the working tree) — run it before
   every remote build launch.
-- Nixpkgs source checkouts for each era live on the build host (one
-  checkout per era; see the era table below).
+- Nixpkgs source checkouts for each era live on the build host. If
+  the `NIX_PATH` dir does not exist, nix silently falls back to the
+  default profile and builds with the wrong toolchain — always verify
+  the path exists.
 - Batch builder: `~/src/build-era.sh NAME NIXPKGS_DIR VERSION...` —
   instantiates, builds, then runs `bitcoind -version` per version;
   logs to `batch-NAME-build.log`, GC-roots results in
@@ -53,8 +55,9 @@ slave; the first run of a new era pays a 1–2 h dependency-chain build
 
 ## Nix quirks that will bite you
 
-- nix 2.3.5 with the experimental CLI disabled: use legacy
-  `nix-build` / `nix-instantiate`, not `nix build`/`nix eval`.
+- Slave nix = 2.35.2 (legacy `nix-build`/`nix-instantiate` work;
+  `nix profile` etc. also exist). `nix-store --delete` works;
+  `nix-store --add-root` does NOT (not an operation in 2.35).
 - `nix-instantiate --eval` prints `<CODE>` for everything without
   `--strict`; always pass `--eval --strict`.
 - **mkDerivation name**: nixpkgs ≤ 18.09 do NOT compose `name` from
@@ -66,6 +69,12 @@ slave; the first run of a new era pays a 1–2 h dependency-chain build
 - `nix-build` without `--add-root` prints GC warnings; the batch script
   roots results, ad-hoc builds may get collected (re-`ls -d
   /nix/store/*-bitcoind-<v>` after GC to check).
+- **Nix string backslashes**: in a `.nix` string literal, write sed
+  backreferences as `\\(` / `\\1` (doubled). A single `\(` is eaten
+  by the string parser and the sed arrives with the pattern broken —
+  it silently stops matching and the build fails deep in the source
+  (verified in the generated drv). Every sed in `core/` follows the
+  doubled-backslash form; keep it.
 
 ## Per-era source/build fixes (already in the derivations — why)
 
@@ -76,6 +85,51 @@ slave; the first run of a new era pays a 1–2 h dependency-chain build
   `makefile.unix`. The 0.2.x–0.4.x GUI binary is `bitcoin` (wx2.9,
   single GUI+node process; run with `ssh -X`); 0.5.x–0.8.6 are
   daemon-only.
+- **GUI era (0.2.x–0.4.x) buildPhase seds** (run after `mkdir -p obj
+  obj/nogui obj/test cryptopp/obj` — the GitHub tag tarballs omit the
+  empty obj dirs the makefiles assume):
+  - glibc ≥ 2.20 defines `htons`/`htonl` as statement-expression
+    macros; global-scope `static const ... = htons(...)` initializers
+    are rejected by gcc → sed to `__builtin_bswap16/32`. 0.2.10–0.2.12
+    moved the macro into `#define DEFAULT_PORT htons(8333)` → those
+    three carry extra bare-token seds for all four bswap names.
+  - `min(nSize - i, 1 + 4999999 / sizeof(T))` in serialize.h fails
+    template deduction (unsigned int vs unsigned long) → cast the
+    second arg.
+  - 0.2.x only: wx2.9 made `wxEvtHandler::AddPendingEvent` protected →
+    sed to `wxPostEvent`. Three ordered seds: (a) the
+    `pframeMain->GetEventHandler()->AddPendingEvent(e)` special case,
+    (b) `X->AddPendingEvent(e)` with a NON-EMPTY identifier
+    (`[a-zA-Z_][a-zA-Z_]*` — an empty `[a-zA-Z_]*` match corrupts
+    `X->GetEventHandler()->AddPendingEvent(e)` into
+    `X->GetEventHandler()wxPostEvent(, e)`), (c) bare `AddPendingEvent(e)`
+    → `wxPostEvent(this, e)`.
+  - 0.2.0: `wxGetOsDescription().mb_str()` → append `.data()`
+    (wxScopedCharBuffer is non-copyable in wx2.9, gcc rejects the
+    pass-by-value).
+  - 0.2.x: the 2009 makefile links the monolithic `wx_gtk2ud-2.8`;
+    sed it to the full nixpkgs wx2.9 split set —
+    `xrc html richtext qa adv core baseu_xml baseu_net baseu` (core
+    alone misses wxHtml + wxRichText symbols).
+  - 0.3.1–0.3.3: `native_file_string().c_str()` → `string().c_str()`
+    (boost 1.60 removed native_file_string).
+  - 0.3.6–0.3.13: append `-l dl` to the link (plugin loading via
+    dlopen; libdl invisible to the old makefiles).
+  - 0.3.21–0.3.24/0.4.0: delete the `USE_UPNP:=0` makefile line
+    (same ifdef-ignores-value trap as 0.5.0–0.8.6 below).
+  - `-Wl,-Bstatic` (static boost/db48 link) finds no static archives in
+    nixpkgs → sed the flag into the `-L` list of the nix libs.
+- **0.4.0**: `ifdef USE_UPNP` + `USE_UPNP:=0` still enables UPnP
+  (ifdef ignores the value) → delete the `USE_UPNP:=0` line.
+- **0.5.0–0.8.6**: `USE_UPNP=-` on the make command line (the makefile
+  `USE_UPNP:=0` still *defines* the macro, so `#ifdef USE_UPNP` in
+  net.cpp demanded miniupnpc headers with no link flag).
+- **0.8.0–0.8.6**: CXX must stay a single token — the leveldb
+  sub-make (`MAKEOVERRIDES =`, invoked with `CXX=$(CXX)`) chokes on
+  spaces → `CXX='g++' CXXFLAGS='-std=gnu++03 -fpermissive'`.
+- **0.1.5** is a source-only artifact: `installPhase` copies
+  `$sourceRoot` to `$out/src` after `cd $NIX_BUILD_TOP` (phases run
+  inside `$sourceRoot`; the `sourceRoot` env var is relative).
 - **0.9–0.12 (16.09)**: `LDFLAGS=-ldl` in configureFlags (configure
   never finds libdl in the nix env); explicit `name` (above).
 - **0.13–0.15.1 (20.09)**: `postUnpack` seds make the
@@ -85,7 +139,11 @@ slave; the first run of a new era pays a 1–2 h dependency-chain build
 - **0.9–0.12 miniupnpc**: vendored `core/_deps/miniupnpc-1.7.nix` (old
   6-arg `upnpDiscover` / 5-arg `UPNP_GetValidIGD` API);
   `core/_deps/openssl-1.0.2.nix` for the pre-1.1 BIGNUM API (0.2–0.8)
-  and the "Detected LibreSSL" configure heuristic (0.9–0.12).
+- **24.1 (23.11)**: `src/chainparamsbase.h` uses `uint16_t` with only
+  `<memory>`/`<string>` included; gcc-12+ no longer transitively
+  pulls in `<cstdint>` → patchPhase seds `#include <cstdint>` in
+  (anchored on the `<memory>` include). 24.0 survived on an earlier
+  header order; do not "clean up" this patch.
 
 ## Host-library leaks (the classic silent failure)
 
@@ -101,6 +159,28 @@ ldd <store>/bin/bitcoind | grep -E "not found|/usr/lib"     # host leak?
 Modern nixpkgs binaries carry the nix glibc loader as interpreter,
 which does not search `/usr/lib`. Fix = add the library to
 `buildInputs`; never rely on host paths.
+
+## Store GC recovery (outputs vanish, registrations stay)
+
+The slave's store is NOT rooted against `nix-collect-garbage`
+(`/nix/var/nix/gcroots` and `~/.local/state/nix/profiles` are
+root-owned; the regular user has no sudo; nix 2.35 has no user-writable
+`nix-store --add-root`). A manual GC has happened once already and
+silently deleted 8 built outputs while the DB kept their
+registrations — nix then reports "nothing to build" for those
+derivations. If that bites:
+
+1. Detect: for each `core/<v>` check `ls -d /nix/store/*-bitcoind-<v>`
+   (plus `*-bitcoin-src-<v>` for 0.1.5).
+2. Clear stale registrations: `nix-store --delete <output-path>`
+   (the path from `nix-store -q <drv>`; it may not exist on disk —
+   that is exactly the point).
+3. Rebuild via the batch script with the era's nixpkgs.
+
+Everything is reproducible from the repo + store tarballs, so this
+costs build time only, not data. If the user wants real protection,
+they can (with sudo) copy the roots list to
+`/nix/var/nix/gcroots/bitcoin-archive` — one store path per line.
 
 ## Misc operational gotchas
 
