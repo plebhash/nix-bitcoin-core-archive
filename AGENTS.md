@@ -1,34 +1,21 @@
-# AGENTS.md — operational notes for nix-bitcoin-core-archive
+# AGENTS.md — notes for agents working on nix-bitcoin-core-archive
 
-Derivations for old Bitcoin Core releases live in `core/<version>/default.nix`,
-forks in `forks/`. Each version dir is self-contained: it imports
-`<nixpkgs>` itself, so the *only* thing that varies between eras is which
-nixpkgs you evaluate it against (`NIX_PATH`).
+> **Local environment?** If an `AGENTS_CUSTOM.md` exists at the repo root,
+> read it first. It is git-ignored and holds the specifics of the local
+> development environment (build hosts, nixpkgs checkouts, helper scripts,
+> local commit conventions) that supplement the generic guidance below.
 
-## Build host (the "slave")
+Nix derivations for old Bitcoin Core releases live in
+`core/<version>/default.nix`, forks in `forks/`. Each version dir is
+self-contained: it imports `<nixpkgs>` itself, so the *only* thing that
+varies between eras is which nixpkgs you evaluate it against
+(`NIX_PATH`).
 
-Heavy builds do NOT run on the omarchy desktop machine (4-core i7-4770,
-the user's daily system — keep it untouched). They run on the build host:
+## Platform
 
-- Reached over ssh on your LAN (address, account and credentials are
-  local environment specifics — keep them out of the repo).
-- Repo mirror: a checkout of this repo on the build host.
-- Mirror it after local edits (sync the working tree) — run it before
-  every remote build launch.
-- Nixpkgs source checkouts for each era live on the build host. If
-  the `NIX_PATH` dir does not exist, nix silently falls back to the
-  default profile and builds with the wrong toolchain — always verify
-  the path exists.
-- Batch builder: `~/src/build-era.sh NAME NIXPKGS_DIR VERSION...` —
-  instantiates, builds, then runs `bitcoind -version` per version;
-  logs to `batch-NAME-build.log`, GC-roots results in
-  `batch-NAME-build.log.roots`.
-- Quick status: `bash /tmp/listbuilt.sh` (built versions) and
-  `tail -1 batch-NAME-build.log` per batch.
-
-If you do **not** have the slave, the same commands work on the local
-machine — just expect single-digit-cores speed and do not launch more
-than one batch at a time.
+The core assumption of this project is that target architecture and
+kernel support remains limited to **x86-64 Linux** — no darwin, no
+arm64/aarch64, nothing else. The derivations are only tested on Linux.
 
 ## Which nixpkgs per era (this is the load-bearing table)
 
@@ -40,35 +27,27 @@ than one batch at a time.
 | v0.9.0 – v0.12.1 | **16.09** | 0.9.x `rpcserver.cpp` uses the 2-arg asio `basic_socket_acceptor<Protocol, Service>`, removed in boost ≥ 1.65; 16.09 ships boost 1.60 |
 | v0.1.5 – v0.8.6 | **16.09** + gcc49 | C++03 code + `wxGTK29` (0.2.x–0.4.x GUI era); the derivations override `stdenv` to `cc = pkgs.gcc49` (with `wx29`/`boost`/`db48` following it) — gcc-5's stricter template deduction breaks this code (e.g. `serialize.h` `min()`); newer channels' wx2.9 headers require C++11 |
 
-Launch pattern:
-
-```
-ssh <build-host> '
-  nohup bash -c "bash ~/src/build-era.sh E4r7 <nixpkgs-16.09-checkout> 0.9.0 0.9.1 ..." \
-    > ~/src/era-E4r7.log 2>&1 &
-  echo "PID: $!"'
-```
-
-The script exports `NIX_PATH` itself. 4–6 concurrent batches saturate the
-slave; the first run of a new era pays a 1–2 h dependency-chain build
+Launching a build: point `NIX_PATH=nixpkgs=<era checkout>` at the era's
+nixpkgs source tree and `nix-build core/<v>/default.nix` (or a
+batch script, see AGENTS_CUSTOM.md). If the `NIX_PATH` dir does not
+exist, nix silently falls back to whatever `<nixpkgs>` resolves to and
+builds with the wrong toolchain — always verify the path exists. The
+first build of a new era pays a 1–2 h dependency-chain build
 (wx29/boost/db48/openssl from source) — later versions are incremental.
 
 ## Nix quirks that will bite you
 
-- Slave nix = 2.35.2 (legacy `nix-build`/`nix-instantiate` work;
-  `nix profile` etc. also exist). `nix-store --delete` works;
-  `nix-store --add-root` does NOT (not an operation in 2.35).
-- `nix-instantiate --eval` prints `<CODE>` for everything without
-  `--strict`; always pass `--eval --strict`.
 - **mkDerivation name**: nixpkgs ≤ 18.09 do NOT compose `name` from
   `pname` + `version`. Pre-0.13 derivations therefore carry an explicit
   `name = "bitcoind-${version}";` — keep it when touching those files
   (same for the `core/_deps/*.nix` helpers).
 - **pkg-config naming**: old nixpkgs call it `pkgconfig`. Headers use
   `(pkgs."pkg-config" or pkgs.pkgconfig)` — preserve that form.
-- `nix-build` without `--add-root` prints GC warnings; the batch script
-  roots results, ad-hoc builds may get collected (re-`ls -d
-  /nix/store/*-bitcoind-<v>` after GC to check).
+- `nix-instantiate --eval` prints `<CODE>` for everything without
+  `--strict`; always pass `--eval --strict`.
+- `nix-build` without `--add-root` prints GC warnings; ad-hoc builds may
+  get collected by a later `nix-collect-garbage` (re-`ls -d
+  /nix/store/*-bitcoind-<v>` after a GC to check).
 - **Nix string backslashes**: in a `.nix` string literal, write sed
   backreferences as `\\(` / `\\1` (doubled). A single `\(` is eaten
   by the string parser and the sed arrives with the pattern broken —
@@ -83,7 +62,7 @@ slave; the first run of a new era pays a 1–2 h dependency-chain build
   narrowing is a hard error in this code; `-fpermissive` alone is not
   enough. `patchPhase` rewrites hardcoded `g++` → `$(CXX)` in
   `makefile.unix`. The 0.2.x–0.4.x GUI binary is `bitcoin` (wx2.9,
-  single GUI+node process; run with `ssh -X`); 0.5.x–0.8.6 are
+  single GUI+node process; needs an X display); 0.5.x–0.8.6 are
   daemon-only.
 - **GUI era (0.2.x–0.4.x) buildPhase seds** (run after `mkdir -p obj
   obj/nogui obj/test cryptopp/obj` — the GitHub tag tarballs omit the
@@ -147,9 +126,9 @@ slave; the first run of a new era pays a 1–2 h dependency-chain build
 
 ## Host-library leaks (the classic silent failure)
 
-A binary that passes `bitcoind -version` **on the build host** but fails
-everywhere else usually linked a host `/usr/lib` library (29.0–31.1
-leaked `/usr/lib/libsodium.so.26`). Detection:
+A binary that passes `bitcoind -version` **on the build machine** but
+fails everywhere else usually linked a host `/usr/lib` library
+(29.0–31.1 leaked `/usr/lib/libsodium.so.26`). Detection:
 
 ```
 readelf -d <store>/bin/bitcoind | grep -E "RUNPATH|RPATH"   # missing dep?
@@ -162,53 +141,42 @@ which does not search `/usr/lib`. Fix = add the library to
 
 ## Store GC recovery (outputs vanish, registrations stay)
 
-The slave's store is NOT rooted against `nix-collect-garbage`
-(`/nix/var/nix/gcroots` and `~/.local/state/nix/profiles` are
-root-owned; the regular user has no sudo; nix 2.35 has no user-writable
-`nix-store --add-root`). A manual GC has happened once already and
-silently deleted 8 built outputs while the DB kept their
-registrations — nix then reports "nothing to build" for those
-derivations. If that bites:
+If a store is not GC-rooted (see AGENTS_CUSTOM.md for the local
+situation), `nix-collect-garbage` can delete built outputs while the
+DB keeps their registrations — nix then reports "nothing to build" for
+those derivations. Recovery:
 
 1. Detect: for each `core/<v>` check `ls -d /nix/store/*-bitcoind-<v>`
    (plus `*-bitcoin-src-<v>` for 0.1.5).
 2. Clear stale registrations: `nix-store --delete <output-path>`
    (the path from `nix-store -q <drv>`; it may not exist on disk —
    that is exactly the point).
-3. Rebuild via the batch script with the era's nixpkgs.
+3. Rebuild with the era's nixpkgs.
 
-Everything is reproducible from the repo + store tarballs, so this
-costs build time only, not data. If the user wants real protection,
-they can (with sudo) copy the roots list to
-`/nix/var/nix/gcroots/bitcoin-archive` — one store path per line.
-
-## Misc operational gotchas
-
-- `pkill -f "pattern"` over ssh kills your own remote shell when the
-  pattern appears in the command line you sent. Use the bracket trick:
-  `pkill -f "build-era.sh E4r[6]"`.
-- The slave has no nixpkgs channel configured; never rely on
-  `<nixpkgs>` resolving there except via the batch script's
-  `NIX_PATH` export (or your own).
-- Long ssh commands get auto-backgrounded by the tooling; that is fine —
-  the batch itself is `nohup`'d and survives.
+Everything is reproducible from the repo, so this costs build time
+only, not data. Real protection = one store path per line in
+`/nix/var/nix/gcroots/<name>` (needs root) or a user profile.
 
 ## Commits
 
-- Author: `plebhash <plebhash@gmail.com>` (the user gpg-signs later;
-  commit with `-c user.name=plebhash -c user.email=plebhash@gmail.com`).
 - Progressive, per-era commits with a body explaining the era's
   nixpkgs pin and the source-level fixes; only commit versions that
-  build and pass the `-version` smoke check.
-- The nixOS VM harness (`tests/vm/`, driven by
-  `tests/vm/run-vm-test.sh`) is the full-integration gate: it installs
-  every derivation into one VM config and runs each binary. Run it
-  before the final commit of an era if you can.
+  build and pass the era's smoke check (see the ladder below).
+- Local author conventions (who signs, what identity to commit as)
+  live in AGENTS_CUSTOM.md; otherwise follow the existing git history.
 
 ## Verification ladder (fast → thorough)
 
 1. `nix-instantiate --parse core/<v>/default.nix` (syntax)
-2. `nix-build core/<v>/default.nix` + `bitcoind -version`
+2. `nix-build core/<v>/default.nix` + era-appropriate smoke check:
+   `bitcoind -version` (v0.13.0+), startup marker (0.5.0–0.12.1, no
+   `-version` flag yet), headless GUI startup (0.2.x–0.4.x)
 3. run a node: `bitcoind -regtest -printtoconsole` (Ctrl-C) — works
    across v0.9–v31.1
-4. `tests/vm/` full-VM run (all versions)
+4. `tests/vm/` full-VM run: a nixOS VM with every derivation installed,
+   per-version check suite (see `tests/vm/default.nix` +
+   `run-vm-test.sh`) — the full-integration gate. The harness locates
+   the era nixpkgs checkouts via the `NIXPKGS_16_09`, `NIXPKGS_20_09`,
+   `NIXPKGS_23_11`, `NIXPKGS_25_05` environment variables (absolute
+   paths to each era's source tree); `NIXPKGS_25_05` also serves as
+   the VM's own nixpkgs generation.
