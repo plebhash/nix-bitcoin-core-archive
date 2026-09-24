@@ -187,11 +187,12 @@ let
       esac
       b=$(bin_of "$out")
       d=$(mktemp -d /tmp/btc-XXXXXX)
-      # -k 5: a binary that ignores TERM is killed, so a foreground
-      # hang cannot stall the suite. Daemon stderr is kept so a
-      # failed start is diagnosable from the build log.
+      # -rpcpassword (not the 0.15.0+ -rpcpass alias): pre-0.15
+      # bitcoind silently ignores unknown flags, so -rpcpass would
+      # leave -rpcpassword unset and fall back to cookie auth,
+      # failing every Basic-auth RPC roundtrip below.
       timeout -k 5 30 "$b" -regtest -daemon -datadir="$d" -server \
-        -rpcuser=archive -rpcpass=archive -rpcport=18443 \
+        -rpcuser=archive -rpcpassword=archive -rpcport=18443 \
         -rpcbind=127.0.0.1 2>"$d.err"
       if [ "$?" -ne 0 ]; then
         dbg=$(tail -3 "$d.err" 2>/dev/null | tr '\n' '|')
@@ -215,7 +216,7 @@ let
       case "$rpc" in
         *'"result":0'*)
           "$b" -stop -datadir="$d" \
-            -rpcuser=archive -rpcpass=archive >/dev/null 2>&1
+            -rpcuser=archive -rpcpassword=archive >/dev/null 2>&1
           i=0
           while [ $i -lt 30 ]; do
             sleep 1
@@ -233,7 +234,7 @@ let
             echo "SKIP-RPC $ver: rpc getblockcount: $rpc"
           fi
           "$b" -stop -datadir="$d" \
-            -rpcuser=archive -rpcpass=archive >/dev/null 2>&1
+            -rpcuser=archive -rpcpassword=archive >/dev/null 2>&1
           rm -rf "$d" "$d.err" 2>/dev/null
           return 1
           ;;
