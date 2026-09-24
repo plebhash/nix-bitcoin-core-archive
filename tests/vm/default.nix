@@ -208,7 +208,7 @@ let
       i=0
       while [ $i -lt 45 ]; do
         sleep 1
-        rpc=$(curl -s -u archive:archive http://127.0.0.1:18443/ \
+        rpc=$(curl -s -m 5 -u archive:archive http://127.0.0.1:18443/ \
               -d '{"method":"getblockcount"}' 2>/dev/null) || rpc=""
         # only a genuine result:0 ends the loop: a -28 "Loading
         # wallet" warmup error must keep polling, not break (it
@@ -218,8 +218,13 @@ let
       done
       case "$rpc" in
         *'"result":0'*)
-          "$b" -stop -datadir="$d" \
-            -rpcuser=archive -rpcpassword=archive >/dev/null 2>&1
+          # a healthy daemon answers -stop in seconds; cap it and
+          # fall back to a datadir kill so one wedged daemon can
+          # never stall the suite (a hung RPC reply would otherwise
+          # block bitcoind -stop forever)
+          timeout -k 5 15 "$b" -stop -datadir="$d" \
+            -rpcuser=archive -rpcpassword=archive >/dev/null 2>&1 \
+            || pkill -f "datadir=$d" 2>/dev/null
           i=0
           while [ $i -lt 30 ]; do
             sleep 1
