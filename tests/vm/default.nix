@@ -113,7 +113,7 @@ let
     }
 
     do_version() {
-      ver="$1"; out="$2"; mode="$3"; [ -z "$mode" ] && mode=ver
+      ver="$1"; out="$2"; mode="$${3:-}"; [ -z "$mode" ] && mode=ver
       b=$(bin_of "$out")
       if [ -z "$b" ] || [ ! -x "$b" ]; then
         echo "FAIL $ver: no binary in $out/bin"; fail=1; return 1
@@ -180,9 +180,13 @@ let
     do_rpc() {
       strict="$1"; ver="$2"; out="$3"
       case "$ver" in
-        # pre-0.13: no -regtest flag; the startup check is the whole
-        # check for these versions.
-        0.*) do_version "$ver" "$out" early || return 1 ;;
+        # v0.5.0-v0.12.1: no -regtest yet (added 0.6.0rc1) and
+        # -version output is inconsistent across the era (some
+        # versions print an rpcpassword diagnostic and exit); the
+        # startup check is the whole check for these versions.
+        # 0.13.0+ has a clean -version and the strict check applies.
+        0.5.*|0.6.*|0.7.*|0.8.*|0.9.*|0.10.*|0.11.*|0.12.*)
+          do_version "$ver" "$out" early || return 1 ;;
         *) do_version "$ver" "$out" || return 1 ;;
       esac
       b=$(bin_of "$out")
