@@ -215,9 +215,12 @@ let
       # bitcoind silently ignores unknown flags, so -rpcpass would
       # leave -rpcpassword unset and fall back to cookie auth,
       # failing every Basic-auth RPC roundtrip below.
+      # stdout to a file, not the runner's output: the -daemon parent
+      # prints "Bitcoin Core starting" to stdout before forking, and
+      # that line would land in runner.out as a non-verdict line.
       timeout -k 5 30 "$b" -regtest -daemon -datadir="$d" -server \
         -rpcuser=archive -rpcpassword=archive -rpcport=18443 \
-        -rpcbind=127.0.0.1 2>"$d.err"
+        -rpcbind=127.0.0.1 >"$d.out" 2>"$d.err"
       if [ "$?" -ne 0 ]; then
         dbg=$(tail -3 "$d.err" 2>/dev/null | tr '\n' '|')
         if [ "$strict" = "1" ]; then
@@ -225,7 +228,7 @@ let
         else
           echo "SKIP-RPC $ver: daemon did not start (flag era): $dbg"
         fi
-        rm -rf "$d" "$d.err" 2>/dev/null
+        rm -rf "$d" "$d.out" "$d.err" 2>/dev/null
         return 1
       fi
       rpc=""
@@ -255,7 +258,7 @@ let
             pgrep -f "bitcoind .*datadir=$d" >/dev/null 2>&1 || break
             i=$((i+1))
           done
-          rm -rf "$d"
+          rm -rf "$d" "$d.out" "$d.err" 2>/dev/null
           echo "OK $ver: regtest rpc getblockcount=0"
           ;;
         *)
@@ -269,7 +272,7 @@ let
           # (-28 rejects every command), so kill it by datadir
           pkill -f "datadir=$d" 2>/dev/null
           sleep 2   # let the RPC port be released for the next version
-          rm -rf "$d" "$d.err" 2>/dev/null
+          rm -rf "$d" "$d.out" "$d.err" 2>/dev/null
           return 1
           ;;
       esac
@@ -367,14 +370,31 @@ let
           if status == 0:
               break
       # grep -c exits 1 on zero matches, which set -e would kill;
-      # `|| true` keeps the count and the exit status. The strict ok
-      # count catches a runner that died early without emitting FAIL.
-      # Log every non-OK line (with diagnostics) when the run has
+      # `|| true` keeps the count and the exit status. runner.out also
+      # carries non-verdict lines: the runner's final "=== runner
+      # done ===" marker (and the regtest daemons' stdout used to land
+      # here too — the -daemon launch now redirects it to $d.out), so
+      # gate on FAIL verdicts specifically, not on "anything not OK".
+      # The gate requires all three:
+      #   (1) no ^FAIL verdict lines — every do_* failure path both
+      #       prints "FAIL $ver: ..." and sets fail=1, so this is
+      #       exact;
+      #   (2) ^OK line count >= 137 — a runner that died early without
+      #       emitting FAIL still has to be caught by the count;
+      #   (3) the last line of runner.out is the runner's own
+      #       "=== runner done ===" marker. The do_* functions never
+      #       exit the runner (they only set fail), so the marker is
+      #       reached iff every generated version invocation ran.
+      #       (2) alone is not sufficient: a runner killed mid-suite
+      #       after enough two-line versions (0.13.0+ prints a
+      #       -version line AND an rpc line) can cross 137 OK lines
+      #       with versions still unchecked.
+      # Log the FAIL lines (with diagnostics) when the run has
       # failures; a green run emits nothing. The driver only records
-      # the output of failed commands, so this is what makes the
-      # full per-version verdict list visible in the build log.
+      # the output of failed commands, so this is what makes the full
+      # per-version verdict list visible in the build log.
       machine.succeed(
-          "out=$(grep -vE '^OK' /tmp/runner.out || true); "
+          "out=$(grep -E '^FAIL' /tmp/runner.out || true); "
           "if [ -n \"$out\" ]; then printf '%s\\n' \"$out\"; exit 1; fi"
       )
       machine.succeed(
@@ -383,7 +403,8 @@ let
           "fl=$(grep -c '^FAIL' /tmp/runner.out || true); "
           "echo SUMMARY: ok=$ok skip-rpc=$sk fail=$fl total=$((ok+sk+fl)); "
           "grep -v '^OK' /tmp/runner.out | tail -30; "
-          "if [ \"$fl\" -gt 0 ] || [ \"$ok\" -lt ${toString (builtins.length versions)} ]; then exit 1; fi"
+          "last=$(tail -n 1 /tmp/runner.out); "
+          "if [ \"$fl\" -gt 0 ] || [ \"$ok\" -lt ${toString (builtins.length versions)} ] || [ \"$last\" != \"=== runner done ===\" ]; then exit 1; fi"
       )
       machine.shutdown()
     '';
