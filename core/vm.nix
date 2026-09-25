@@ -343,7 +343,7 @@ let
         for v in $(jq -r '.versions | to_entries[] | select(.value.snapshotKey != null) | .key' "$JSON"); do
           load_snapshot "$v"
         done
-      done
+      fi
     }
 
     do_status() {
