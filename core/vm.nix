@@ -391,7 +391,13 @@ let
   fleet = pkgs.stdenvNoCC.mkDerivation {
     name = "bitcoin-core-archive-fleet";
     nativeBuildInputs = [ pkgs.jq ];
-    srcs = [ fleetJson deployScript ];
+    # Plain files, not unpackable source archives — they must NOT go
+    # in srcs (stdenv would try to unpack them). As derivation
+    # attributes they become build-environment variables holding
+    # their store paths, and the interpolation in installPhase keeps
+    # them in the closure.
+    fleetJson = fleetJson;
+    deployScript = deployScript;
     fleetKey = fleetKeyDir + "/id_ed25519";
     # Closure guarantee: the bundle only ships when every VM image built.
     buildInputs = lib.attrValues images;
