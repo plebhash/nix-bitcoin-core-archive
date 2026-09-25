@@ -102,7 +102,7 @@ let
       t="$1"; b="$2"; shift 2
       f=$(mktemp /tmp/cap.XXXXXX)
       if [ "$t" -gt 0 ]; then
-        timeout "$t" -k 5 "$b" "$@" >"$f" 2>&1
+        timeout -k 5 "$t" "$b" "$@" >"$f" 2>&1
       else
         "$b" "$@" >"$f" 2>&1
       fi
