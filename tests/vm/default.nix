@@ -165,19 +165,36 @@ let
       # check is "links and runs": the app keeps running on the
       # virtual display (rc=124 at the 5 s cap); a broken binary
       # (missing library, crash) exits early with no usable output.
+      # v0.3.6-v0.3.20.2 additionally daemonize at startup: main()
+      # forks under __WXGTK__ when no command-line arg is passed;
+      # the parent pthread_exit(0)s (so rc=0 and no output — the
+      # child's stdout is block-buffered into the file) and the
+      # child keeps running the node. rc=0 is therefore OK for
+      # those iff the child carrying our -datadir is still alive;
+      # it is killed so port 8333 stays free for the next version.
       d=$(mktemp -d /tmp/btc-XXXXXX)
       Xvfb :99 >/dev/null 2>&1 &
       xpid=$!
       sleep 1
       o=$(DISPLAY=:99 run_cap 5 "$b" -datadir="$d"); rc=$?
       kill "$xpid" >/dev/null 2>&1
-      rm -rf "$d"
       if [ -n "$o" ] || [ "$rc" = "124" ]; then
         echo "OK $ver: gui binary runs (headless X)"
-      else
-        echo "FAIL $ver: gui binary produced no output and did not survive (rc=$rc): $(printf '%s' "$o" | head -1)"
-        fail=1; return 1
+        rm -rf "$d"
+        return 0
       fi
+      # Daemonizing fork: the parent exited early; the child keeps
+      # our -datadir in its command line.
+      if pgrep -f "datadir=$d" >/dev/null 2>&1; then
+        pkill -f "datadir=$d" 2>/dev/null; sleep 2
+        pkill -9 -f "datadir=$d" 2>/dev/null
+        echo "OK $ver: gui binary daemonized (child node running)"
+        rm -rf "$d"
+        return 0
+      fi
+      echo "FAIL $ver: gui binary produced no output and did not survive (rc=$rc): $(printf '%s' "$o" | head -1)"
+      rm -rf "$d"
+      fail=1; return 1
     }
 
     do_rpc() {
