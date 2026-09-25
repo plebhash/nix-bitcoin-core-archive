@@ -396,6 +396,10 @@ let
     # attributes they become build-environment variables holding
     # their store paths, and the interpolation in installPhase keeps
     # them in the closure.
+    # No source at all: the bundle is assembled from buildInputs and
+    # the file attributes above, so skip unpackPhase (stdenv
+    # otherwise dies with "$src or $srcs should point to the source").
+    dontUnpack = true;
     fleetJson = fleetJson;
     deployScript = deployScript;
     fleetKey = fleetKeyDir + "/id_ed25519";
