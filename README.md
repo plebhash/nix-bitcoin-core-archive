@@ -29,6 +29,70 @@ $ ls result/bin
 bitcoin-cli  bitcoind  bitcoin-qt  bitcoin-tx  bitcoin-wallet
 ```
 
+## data directory compatibility
+
+Bitcoin Core's on-disk format — the `blocks/index` LevelDB block index,
+the `chainstate` LevelDB coin database (and, pre-v0.8.0, the Berkeley
+DB databases) — is **not stable across releases**. Two versions can
+share a `~/.bitcoin` (or `-datadir`) only if they fall in the same
+format group below.
+
+`tools/extract-compat.py` derives each release's on-disk fingerprint
+from the upstream git tags (full output: `tools/compat.tsv`). A group
+is a maximal run of consecutive versions sharing: the DB engine, the
+coin key prefix, the coin-serialization fingerprint, the
+block-index-serialization fingerprint, and the block-index location.
+
+| group | versions | engine | coin key | obfuscated | coin fp | block-index fp |
+|-------|----------|--------|----------|------------|---------|----------------|
+| 1 | 0.1.5 | Berkeley DB | – | – | – | 03fae236610b |
+| 2 | 0.2.0 – 0.3.10 | Berkeley DB | – | – | – | 67e229a2d7f0 |
+| 3 | 0.3.12 – 0.3.21 | Berkeley DB | – | – | – | 9a6bbd37b409 |
+| 4 | 0.3.22 – 0.7.2 | Berkeley DB | – | – | – | c0ee0577f665 |
+| 5 | 0.8.0 – 0.8.1 | LevelDB | `c` | no | 430368e4ee74 | 7becec847b30 |
+| 6 | 0.8.2 – 0.8.6 | LevelDB | `c` | no | 430368e4ee74 | 7023acece663 |
+| 7 | 0.9.0 – 0.9.5 | LevelDB | `c` | no | 430368e4ee74 | 341fc3f7b8bf |
+| 8 | 0.10.0 – 0.11.3 | LevelDB | `c` | no | 8d3532e655d3 | c2426086e0f5 |
+| 9 | 0.12.0 – 0.13.2 | LevelDB | `c` | yes | 8d3532e655d3 | c2426086e0f5 |
+| 10 | 0.14.0 – 0.14.3 | LevelDB | `c` | yes | 27c7aac6e8e2 | 5bde826b4924 |
+| 11 | 0.15.0 – 0.15.2 | LevelDB | `C` | yes | fa3980c4d841 | 5ebe11e1989b |
+| 12 | 0.16.0 – 0.16.3 | LevelDB | `C` | yes | dead42387f2f | 5ebe11e1989b |
+| 13 | 0.17.0 – 0.19.2 | LevelDB | `C` | yes | e8f9dbd0bf57 | f53eb49b123a |
+| 14 | 0.20.0 – 22.1 | LevelDB | `C` | yes | e447123e2346 | 86541ec2278e |
+| 15 | 23.0 – 25.2 | LevelDB | `C` | yes | e447123e2346 | 728cd8a091c8 |
+| 16 | 26.0 – 31.1 | LevelDB | `C` | yes | e447123e2346 | 0419e90a5ff3 |
+
+Fingerprint columns are `sha1[:12]` of the normalized serialization
+code (group 11 vs 12, 13 vs 14 etc. are split by code changes that may
+still produce identical bytes — see caveat below).
+
+**Reading the table**
+
+- **Within a group**: safe to share a data directory across any two
+  versions in the group (e.g. run 0.19.2 on a datadir written by
+  0.17.0, or 31.1 on one written by 26.0).
+- **Across groups**: incompatible — the other version cannot
+  reliably read the databases; use a separate datadir (or start
+  fresh / reindex).
+- **Berkeley DB era (groups 1–4)**: four mutually incompatible BDB
+  sub-eras; pre-v0.8.0 datadirs are never portable forward.
+- **coin key `c` → `C` at v0.15.0** and **value obfuscation at
+  v0.12.0** are the two headline on-disk format changes of the
+  LevelDB era.
+- **regtest**: from v0.9.0 through v31.1 all versions assert the same
+  regtest genesis (`0f9188f1…e2206`), so regtest chain *data* is
+  consistent across the whole range; the on-disk groups above still
+  determine which pairs can open the same regtest datadir.
+  v0.1.5 – v0.8.6 have no `-regtest` network.
+- **Caveat**: the split is *conservative*. A changed fingerprint means
+  the serialization *code* changed, not necessarily the bytes on disk
+  (e.g. v0.17.0's `VarIntMode::NONNEGATIVE_SIGNED` only alters
+  encoding of negative values, which block fields never hold). The
+  table is therefore a safe superset of incompatible pairs; empirical
+  swap-testing (see `tests/vm/`) is the final arbiter for boundary
+  groups that may in fact be byte-compatible.
+
+
 ---
 
 # Bitcoin Core
