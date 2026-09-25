@@ -113,7 +113,10 @@ let
     }
 
     do_version() {
-      ver="$1"; out="$2"; mode="$${3:-}"; [ -z "$mode" ] && mode=ver
+      ver="$1"; out="$2"
+      mode=""
+      if [ "$#" -ge 3 ]; then mode="$3"; fi
+      [ -z "$mode" ] && mode=ver
       b=$(bin_of "$out")
       if [ -z "$b" ] || [ ! -x "$b" ]; then
         echo "FAIL $ver: no binary in $out/bin"; fail=1; return 1
