@@ -13,8 +13,8 @@
 #   - era nixpkgs checkouts come from the environment:
 #     NIXPKGS_{16_09,20_09,23_11,25_05} (absolute paths; the 25.05
 #     checkout also defines the guest's nixpkgs generation);
-#   - the fleet ssh key lives in ./fleet-keys (git-ignored, generated
-#     locally with ssh-keygen — fleet-only, disposable, never personal;
+# - the fleet ssh key lives in ../fleet-keys (<repo>/fleet-keys, git-ignored,
+#     generated locally with ssh-keygen — fleet-only, disposable, never personal;
 #     FLEET_KEYS=/path/to/keydir overrides the location).
 #
 # Per-VM resources (sparse qcow2 root, created on first boot):
@@ -28,7 +28,8 @@
 #
 # Build on the build host:
 #   nix-build core/vm.nix -A fleet         # 137 toplevels + 137 wrappers
-#   nix-build core/vm.nix -A images.31.1   # one VM image (toplevel+wrapper)
+#   # -A cannot select dotted attr names, so single images go via -E:
+#   nix-build $(nix-instantiate --eval --strict -E '(import ./core/vm.nix).images."31.1"')
 
 let
   eraPath = var:
@@ -97,13 +98,13 @@ let
   hostOf = version: "btc-${lib.replaceStrings ["."] ["-"] version}";
 
   # Fleet ssh keypair — disposable, fleet-only, and never in git:
-  # ./fleet-keys (git-ignored), generate with
+  # <repo>/fleet-keys (git-ignored), generate at the repo root with
   #   ssh-keygen -t ed25519 -N "" -C fleet -f fleet-keys/id_ed25519
   # FLEET_KEYS=/path/to/keydir overrides the location.
   fleetKeyDir =
     let
       p = builtins.getEnv "FLEET_KEYS";
-      d = if p != "" then p else ./fleet-keys;
+      d = if p != "" then p else ./../fleet-keys;
     in
     assert builtins.pathExists (d + "/id_ed25519")
       && builtins.pathExists (d + "/id_ed25519.pub");
@@ -152,6 +153,11 @@ let
             networking.hostName = host;
             services.openssh.enable = true;
             services.openssh.settings.PermitRootLogin = "prohibit-password";
+            # The 25.05 era checkouts in this environment lack the
+            # nixos users module, so inject the fleet key via /etc:
+            services.openssh.settings.AuthorizedKeysFile =
+              "/etc/ssh/authorized_keys";
+            environment.etc."ssh/authorized_keys".text = fleetPubKey;
             virtualisation.cores = res.vcpu;
             system.stateVersion = "25.05";
             environment.systemPackages = [ (eraPkg version) ];
@@ -202,7 +208,7 @@ let
         tier = tierOf v;
         sshPort = 2222 + idxOf v;
         rpcPort = 18443 + idxOf v;
-        image = "${images v}";
+        image = "${images.${v}}";
       }
       // lib.optionalAttrs (lib.hasPrefix "snapshot" (tierOf v)) {
         snapshotKey = lib.removePrefix "snapshot-" (tierOf v);
@@ -210,9 +216,9 @@ let
       };
   }) versions);
 
-  fleetJson = builtins.toJSON {
+  fleetJson = pkgs.writeText "fleet.json" (builtins.toJSON {
     versions = entries;
-  };
+  });
 
   deployScript = pkgs.writeScript "deploy-fleet.sh" ''
     #!/usr/bin/env bash
@@ -390,20 +396,22 @@ let
     # Closure guarantee: the bundle only ships when every VM image built.
     buildInputs = lib.attrValues images;
     installPhase = ''
-      mkdir -p $out/bin $out/keys
+      # The deploy script resolves fleet.json and keys/ relative to
+      # itself (FLEET_DIR), so they live next to it in $out/bin.
+      mkdir -p $out/bin/keys
       cp "$deployScript" $out/bin/deploy-fleet.sh
       chmod +x $out/bin/deploy-fleet.sh
       bash -n $out/bin/deploy-fleet.sh
-      cp "$fleetJson" $out/fleet.json
-      cp "$fleetKey" $out/keys/id_ed25519
-      chmod 600 $out/keys/id_ed25519
+      cp "$fleetJson" $out/bin/fleet.json
+      cp "$fleetKey" $out/bin/keys/id_ed25519
+      chmod 600 $out/bin/keys/id_ed25519
       for img in ${lib.concatStringsSep " " (lib.map (i: "'${i}'") (lib.attrValues images))}; do
         ls "$img"/bin/run-*-vm >/dev/null 2>&1 || {
           echo "FLEET-BUILD-ERROR: no run-*-vm script in $img" >&2
           exit 1
         }
       done
-      echo "fleet bundle ready: $(jq -r '.versions | length' $out/fleet.json) VMs"
+      echo "fleet bundle ready: $(jq -r '.versions | length' $out/bin/fleet.json) VMs"
     '';
   };
 in
