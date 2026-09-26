@@ -84,7 +84,13 @@ let
           "-rpcpassword=archive"
         ]
         # -prune exists from 0.11.0; older GUI-era members get no prune.
-        ++ (if lib.versionOlder v "0.11.0" then [ ] else pruneFlag tier);
+        ++ (if lib.versionOlder v "0.11.0" then [ ] else pruneFlag tier)
+        # -blocksxor exists from 28.0. A fresh datadir initialized by
+        # a >= 28.0 member would otherwise store block *.dat files
+        # XOR-obfuscated with a random key (blocksdir/xor.dat), which
+        # pre-28.0 group members cannot read ("Corrupted block
+        # database"). Force the plain (zero-key) form group-wide.
+        ++ (if lib.versionOlder v "28.0" then [ ] else [ "-blocksxor=0" ]);
 
       vmCfg = import "${pkgsRoot}/nixos/lib/eval-config.nix" {
         system = builtins.currentSystem;

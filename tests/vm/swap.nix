@@ -114,9 +114,17 @@ let
       sleep 1
     }
 
-    startup_log() { # datadir — daemon log tail, both pre-0.13 (datadir
-      # root) and 0.13+ (datadir/regtest/) layouts.
-      cat "$1/debug.log" "$1/regtest/debug.log" 2>/dev/null | tail -5
+    startup_log() { # datadir — daemon log excerpt for a failed start:
+      # the error lines if present, else the tail. Both pre-0.13
+      # (datadir root) and 0.13+ (datadir/regtest/) layouts.
+      local log hits
+      log=$(cat "$1/debug.log" "$1/regtest/debug.log" 2>/dev/null)
+      hits=$(printf '%s\n' "$log" | grep -E 'ERROR|Aborted|Corrupted|reindex|Insufficient' | head -15)
+      if [ -n "$hits" ]; then
+        printf '%s\n' "$hits"
+      else
+        printf '%s\n' "$log" | tail -15
+      fi
     }
 
     # --- static checks on the swap fleet's generated surface ---
@@ -183,12 +191,17 @@ let
     # the claim under test is chainstate compatibility, and wallet
     # formats are not intra-group compatible in every pair. The
     # older member starts on the same datadir and must read all 50
-    # blocks via RPC.
-    swap_case() { # group anchor older anchorBin olderBin mineMode olderDisableWallet
-      gno=$1; anchor=$2; older=$3; A=$4; O=$5; MINEMODE=$6; ODW=$7
+    # blocks via RPC. The anchor's AXTRA carries -blocksxor=0 for
+    # anchors >= 28.0: without it, a freshly initialized datadir
+    # stores block *.dat files XOR-obfuscated with a random key
+    # (blocksdir/xor.dat), which pre-28.0 members cannot read —
+    # the 31.1 -> 26.0 pair fails "Corrupted block database"
+    # without it.
+    swap_case() { # group anchor older anchorBin olderBin mineMode olderDisableWallet anchorXtra
+      gno=$1; anchor=$2; older=$3; A=$4; O=$5; MINEMODE=$6; ODW=$7; AXTRA=$8
       d=$(mktemp -d /tmp/btcswap-XXXXXX)
       if ! "$A" -regtest -daemon -server -rpcuser=$RPCU -rpcpassword=$RPCP \
-          -rpcport=$RPCPORT -port=$((RPCPORT+1)) -rpcbind=127.0.0.1 -datadir="$d" \
+          -rpcport=$RPCPORT -port=$((RPCPORT+1)) -rpcbind=127.0.0.1 -datadir="$d" $AXTRA \
           > "$d.anchor.out" 2>&1; then
         echo "FAIL swap G$gno: anchor $anchor failed to start: $(head -1 "$d.anchor.out")"
         fail=1
@@ -295,7 +308,8 @@ let
     swap_case ${toString p.group} ${p.anchor} ${p.older} \
       ${eraPkg p.anchor}/bin/bitcoind ${eraPkg p.older}/bin/bitcoind \
       ${mineMode p.anchor} \
-      ${if lib.versionOlder p.older "0.15.0" then "0" else "1"}
+      ${if lib.versionOlder p.older "0.15.0" then "0" else "1"} \
+      ${if lib.versionOlder p.anchor "28.0" then "\"\"" else "-blocksxor=0"}
       ''
     ) pairs)}
 
