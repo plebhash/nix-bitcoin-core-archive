@@ -59,7 +59,7 @@ let
     else if lib.versionOlder version "22.0" then eras."20.09"  # 0.13.0-0.21.2
     else if lib.versionOlder version "29.0" then eras."23.11"  # 22.0-28.4
     else eras."25.05";                                       # 29.0-31.1
-  in import coreDir/"${version}/default.nix" { pkgs = era; };
+  in import ../core/${version}/default.nix { pkgs = era; };
 
   tierOf = version:
     if version == "0.1.5" then "src"
@@ -146,10 +146,10 @@ let
   allGroupVersions = lib.concatMap (g: g.versions) groups;
 in
 assert lib.length allGroupVersions == lib.length (lib.unique allGroupVersions);
-assert (lib.sort lib.compareVersions allGroupVersions) == (lib.sort lib.compareVersions versions);
+assert (lib.sort (lib.versionOlder) allGroupVersions) == (lib.sort (lib.versionOlder) versions);
 # Versions ascend inside each group, so lib.last is the newest release
 # (the group's anchor).
-assert lib.all (g: (lib.sort lib.compareVersions g.versions) == g.versions) groups;
+assert lib.all (g: (lib.sort (lib.versionOlder) g.versions) == g.versions) groups;
 {
   inherit pkgsRoot pkgs lib eras coreDir versions eraPkg tierOf resOf;
   inherit fleetKeyDir fleetPubKey snapshotSpec groups;

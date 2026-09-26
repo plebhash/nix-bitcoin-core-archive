@@ -35,7 +35,7 @@
 # Build on the build host:
 #   nix-build vm/swap.nix -A swapBundle   # group images + the bundle
 #   # single images (dotted attr names need -E, same as vm/all.nix):
-#   nix-build $(nix-instantiate --eval --strict -E '(import ./vm/swap.nix).images."16"')
+#   nix-build $(nix-instantiate --eval -E '(import ./vm/swap.nix).images."16"')
 
 let
   common = import ./common.nix;
@@ -53,7 +53,7 @@ let
     if lib.versionOlder v "0.5.0" then "bitcoin-${host}-${verdash v}" # wx2.9 GUI
     else "bitcoind-${host}-${verdash v}";
 
-  images = lib.mapAttrs (g: _:
+  images = lib.mapAttrs (_: g:
     let
       host = hostOf g;
       anchor = anchorOf g;
@@ -83,7 +83,8 @@ let
           "-rpcuser=archive"
           "-rpcpassword=archive"
         ]
-        ++ lib.optional (! (lib.versionOlder v "0.11.0")) (pruneFlag tier);
+        # -prune exists from 0.11.0; older GUI-era members get no prune.
+        ++ (if lib.versionOlder v "0.11.0" then [ ] else pruneFlag tier);
 
       vmCfg = import "${pkgsRoot}/nixos/lib/eval-config.nix" {
         system = builtins.currentSystem;
@@ -166,7 +167,7 @@ let
       };
     in
     vmCfg.config.system.build.vm
-  ) (lib.listToAttrs (lib.map (g: { name = toString g.no; value = true; }) swapGroups));
+  ) (lib.listToAttrs (lib.map (g: { name = toString g.no; value = g; }) swapGroups));
 
   entries = lib.listToAttrs (lib.map (g: {
     name = toString g.no;

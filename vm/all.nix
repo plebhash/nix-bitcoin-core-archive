@@ -29,7 +29,7 @@
 # Build on the build host:
 #   nix-build vm/all.nix -A fleet         # 137 toplevels + 137 wrappers
 #   # -A cannot select dotted attr names, so single images go via -E:
-#   nix-build $(nix-instantiate --eval --strict -E '(import ./vm/all.nix).images."31.1"')
+#   nix-build $(nix-instantiate --eval -E '(import ./vm/all.nix).images."31.1"')
 
 let
   # Shared era/version/tier/key helpers (vm/common.nix — also used by
