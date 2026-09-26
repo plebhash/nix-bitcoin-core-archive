@@ -23,7 +23,7 @@
 #      data-directory compatibility table.
 #
 # The 15 swap images themselves are a host-side build
-# (`nix-build vm/swap.nix -A bundle`); booting one is a KVM
+# (`nix-build vm/swap.nix -A swapBundle`); booting one is a KVM
 # operation, which this harness does not nest.
 #
 # Run on the build host (era NIXPKGS_* checkouts as absolute paths,
@@ -40,8 +40,8 @@ let
 
   # Swap pairs: (anchor, older) — both members of the same compat
   # group, anchor = the group's newest release. One per format era:
-  #   0.9.5  -> 0.9.0   LevelDB era, pre-0.13 RPC (genproclimit mining)
-  #   0.11.3 -> 0.10.0  pre-0.13 RPC, pre-obfuscation coin values
+  #   0.9.5  -> 0.9.0   LevelDB era, setgenerate on-demand mining
+  #   0.11.3 -> 0.10.0  synchronous generate RPC, pre-obfuscation coin values
   #   22.1   -> 0.20.0  spans nixpkgs eras (23.11 -> 20.09)
   #   31.1   -> 26.0    modern era, widest group
   pairOf = anchor: older:
@@ -60,6 +60,16 @@ let
     (pairOf "22.1" "0.20.0")
     (pairOf "31.1" "26.0")
   ];
+  # Per-era mining RPC for the anchor (verified against the binaries):
+  #   setgen       < 0.11.0:  setgenerate [true, 50], one on-demand burst
+  #   gen          0.11.x:    synchronous generate [50]
+  #   wallet-auto  0.13.0-0.17.x: default wallet auto-creates, generatetoaddress
+  #   wallet-create >= 0.18:  createwallet, wallet RPCs via /wallet/<name> URI
+  mineMode = v:
+    if lib.versionOlder v "0.11.0" then "setgen"
+    else if lib.versionOlder v "0.13.0" then "gen"
+    else if lib.versionOlder v "0.18.0" then "wallet-auto"
+    else "wallet-create";
   swapVersions = lib.unique (lib.flatten (lib.map (p: [ p.anchor p.older ]) pairs));
   expectGroups = builtins.length groups - 1; # group 1 (0.1.5) is source-only
   expectOk = 5 + builtins.length pairs;     # static checks + swaps
@@ -72,15 +82,15 @@ let
     RPCP=swap-test-pass
     RPCPORT=18443
 
-    rpc() { # method paramsJson
-      curl -s -m 5 -u "$RPCU:$RPCP" "http://127.0.0.1:$RPCPORT/" \
-        -d "{\"method\":\"$1\",\"params\":$2}" 2>/dev/null
+    rpc() { # timeoutSec method paramsJson [walletPath]
+      curl -s -m "$1" -u "$RPCU:$RPCP" "http://127.0.0.1:$RPCPORT/''${4:-}" \
+        -d "{\"method\":\"$2\",\"params\":$3}" 2>/dev/null
     }
-    count() { rpc getblockcount "[]" | tr -dc '0-9'; }
+    count() { rpc 5 getblockcount "[]" | jq -r 'select(.result != null) | .result' 2>/dev/null; }
 
     wait_rpc() {
       local i=0 c
-      while [ $i -lt 60 ]; do
+      while [ $i -lt 120 ]; do
         sleep 1
         c=$(count)
         [ -n "$c" ] && return 0
@@ -89,17 +99,24 @@ let
       return 1
     }
 
-    stop_daemon() { # bin datadir
-      "$1" -datadir="$2" -rpcuser=$RPCU -rpcpassword=$RPCP \
-        -rpcport=$RPCPORT -rpcbind=127.0.0.1 -stop >/dev/null 2>&1 || true
+    stop_daemon() { # datadir
+      # RPC stop (the CLI -stop option was removed in 0.21, and a
+      # hard kill skips the shutdown flush — chainstate must be on
+      # disk before the older member starts on the same datadir).
+      rpc 30 stop '[]' >/dev/null 2>&1 || true
       local i=0
-      while [ $i -lt 20 ]; do
-        pgrep -f "datadir=$2" >/dev/null 2>&1 || return 0
+      while [ $i -lt 25 ]; do
+        pgrep -f "datadir=$1" >/dev/null 2>&1 || return 0
         sleep 1
         i=$((i+1))
       done
-      pkill -9 -f "datadir=$2" 2>/dev/null || true
+      pkill -9 -f "datadir=$1" 2>/dev/null || true
       sleep 1
+    }
+
+    startup_log() { # datadir — daemon log tail, both pre-0.13 (datadir
+      # root) and 0.13+ (datadir/regtest/) layouts.
+      cat "$1/debug.log" "$1/regtest/debug.log" 2>/dev/null | tail -5
     }
 
     # --- static checks on the swap fleet's generated surface ---
@@ -148,7 +165,7 @@ let
     # `status` must run clean with zero VMs booted (all lines "down").
     if out=$(bash "$S/deploy-swap.sh" status 2>&1); then
       echo "$out"
-      echo "$out" | grep -q ' down' && \
+      if echo "$out" | grep -q ' down'; then
         echo "OK static: deploy status smoke"
       else
         echo "FAIL static: deploy status output"
@@ -167,80 +184,120 @@ let
     # formats are not intra-group compatible in every pair. The
     # older member starts on the same datadir and must read all 50
     # blocks via RPC.
-    swap_case() { # group anchor older anchorBin olderBin anchorPre014 olderDisableWallet
-      gno=$1; anchor=$2; older=$3; A=$4; O=$5; AGEN=$6; ODW=$7
+    swap_case() { # group anchor older anchorBin olderBin mineMode olderDisableWallet
+      gno=$1; anchor=$2; older=$3; A=$4; O=$5; MINEMODE=$6; ODW=$7
       d=$(mktemp -d /tmp/btcswap-XXXXXX)
-      xtra=""
-      if [ "$AGEN" = "1" ]; then xtra="-genproclimit=1"; else xtra="-disablewallet"; fi
       if ! "$A" -regtest -daemon -server -rpcuser=$RPCU -rpcpassword=$RPCP \
-          -rpcport=$RPCPORT -rpcbind=127.0.0.1 -datadir="$d" $xtra \
+          -rpcport=$RPCPORT -port=$((RPCPORT+1)) -rpcbind=127.0.0.1 -datadir="$d" \
           > "$d.anchor.out" 2>&1; then
         echo "FAIL swap G$gno: anchor $anchor failed to start: $(head -1 "$d.anchor.out")"
         fail=1
         rm -rf "$d"
         return
       fi
+      # -daemon forks and the parent exits 0 even when the child dies
+      # at startup (port bind, unknown flag); verify liveness before
+      # the 120 s RPC wait.
+      sleep 3
+      if ! pgrep -f "datadir=$d" >/dev/null 2>&1; then
+        echo "FAIL swap G$gno: anchor $anchor died at startup: $(startup_log "$d")"
+        fail=1
+        rm -rf "$d"
+        return
+      fi
       if ! wait_rpc; then
-        echo "FAIL swap G$gno: anchor $anchor started but no RPC: $(tail -3 "$d.anchor.out")"
-        stop_daemon "$A" "$d"
+        echo "FAIL swap G$gno: anchor $anchor started but no RPC: $(startup_log "$d")"
+        stop_daemon "$d"
         fail=1
         rm -rf "$d"
         return
       fi
-      if [ "$AGEN" = "1" ]; then
-        rpc generate "[50]" > /dev/null
-      else
-        a=$(rpc getnewaddress "[]" | sed 's/[""]//g')
-        rpc generatetoaddress "[$a, 50]" > /dev/null
-      fi
-      c=$(count)
-      if [ "$c" != "50" ]; then
-        echo "FAIL swap G$gno: anchor $anchor mined to $c, want 50"
-        stop_daemon "$A" "$d"
+      # Mining, era-aware (verified against each era's binary):
+      #   setgen (< 0.11.0): no generate RPC; one on-demand
+      #     setgenerate burst mines the full 50.
+      #   gen (0.11.x-0.12.x): synchronous generate RPC.
+      #   wallet-auto (0.13.0-0.17.x): the default wallet
+      #     auto-creates; mine via generatetoaddress.
+      #   wallet-create (>= 0.18): no auto wallet; createwallet
+      #     first, wallet RPCs on the /wallet/<name> URI.
+      mout=""
+      c=""
+      case "$MINEMODE" in
+      setgen)
+        mout=$(rpc 300 setgenerate '[true, 50]')
+        c=$(count)
+        ;;
+      gen)
+        mout=$(rpc 300 generate '[50]')
+        c=$(count)
+        ;;
+      wallet-auto)
+        a=$(rpc 10 getnewaddress '[]' | jq -r 'select(.result != null) | .result' 2>/dev/null)
+        mout=$(rpc 300 generatetoaddress "[50, \"$a\"]")
+        c=$(count)
+        ;;
+      wallet-create)
+        mout=$(rpc 30 createwallet '["swapw"]')
+        a=$(rpc 10 getnewaddress '[]' wallet/swapw | jq -r 'select(.result != null) | .result' 2>/dev/null)
+        mout=$(rpc 300 generatetoaddress "[50, \"$a\"]" wallet/swapw)
+        c=$(count)
+        ;;
+      esac
+      if [ -z "$c" ] || [ "$c" -lt 50 ] 2>/dev/null; then
+        echo "FAIL swap G$gno: anchor $anchor mined to ''${c:-0}, want >= 50 (rpc: $mout)"
+        stop_daemon "$d"
         fail=1
         rm -rf "$d"
         return
       fi
-      stop_daemon "$A" "$d"
-      rm -f "$d/wallet.dat" "$d/wallet" "$d/labels.conf"
+      stop_daemon "$d"
+      rm -f "$d/wallet.dat" "$d/regtest/wallet.dat" "$d/regtest/wallet" "$d/regtest/labels.conf"
+      rm -rf "$d/regtest/wallets"
       oxtra=""
       if [ "$ODW" = "1" ]; then oxtra="-disablewallet"; fi
       if ! "$O" -regtest -daemon -server -rpcuser=$RPCU -rpcpassword=$RPCP \
-          -rpcport=$RPCPORT -rpcbind=127.0.0.1 -datadir="$d" $oxtra \
+          -rpcport=$RPCPORT -port=$((RPCPORT+1)) -rpcbind=127.0.0.1 -datadir="$d" $oxtra \
           > "$d.older.out" 2>&1; then
         echo "FAIL swap G$gno: older $older failed to start on $anchor's datadir: $(head -1 "$d.older.out")"
         fail=1
         rm -rf "$d"
         return
       fi
+      sleep 3
+      if ! pgrep -f "datadir=$d" >/dev/null 2>&1; then
+        echo "FAIL swap G$gno: older $older died at startup: $(startup_log "$d")"
+        fail=1
+        rm -rf "$d"
+        return
+      fi
       if ! wait_rpc; then
-        echo "FAIL swap G$gno: older $older started but no RPC: $(tail -3 "$d.older.out")"
+        echo "FAIL swap G$gno: older $older started but no RPC: $(startup_log "$d")"
         pkill -9 -f "datadir=$d" 2>/dev/null || true
         fail=1
         rm -rf "$d"
         return
       fi
       c=$(count)
-      if [ "$c" != "50" ]; then
-        echo "FAIL swap G$gno: older $older read count $c from $anchor's datadir, want 50"
-        stop_daemon "$O" "$d"
+      if [ -z "$c" ] || [ "$c" -lt 50 ] 2>/dev/null; then
+        echo "FAIL swap G$gno: older $older read count ''${c:-0} from $anchor's datadir, want >= 50"
+        stop_daemon "$d"
         fail=1
         rm -rf "$d"
         return
       fi
       echo "OK swap: G$gno $anchor -> $older ($c blocks read)"
-      stop_daemon "$O" "$d"
+      stop_daemon "$d"
       rm -rf "$d"
     }
 
-    ${lib.concatMapSep "\n" (p:
+    ${lib.concatStringsSep "\n" (lib.map (p:
       ''
     swap_case ${toString p.group} ${p.anchor} ${p.older} \
-      ${eraPkg p.anchor.outPath} ${eraPkg p.older.outPath} \
-      ${if lib.versionOlder p.anchor "0.14.0" then "1" else "0"} \
+      ${eraPkg p.anchor}/bin/bitcoind ${eraPkg p.older}/bin/bitcoind \
+      ${mineMode p.anchor} \
       ${if lib.versionOlder p.older "0.15.0" then "0" else "1"}
       ''
-    ) pairs}
+    ) pairs)}
 
     echo "=== swap runner done ==="
     exit $fail
@@ -253,6 +310,7 @@ let
     mkdir -p $out/bin
     cp ${runner.outPath} $out/bin/swap-runner
     chmod +x $out/bin/swap-runner
+    bash -n $out/bin/swap-runner
   '';
 
   testSet = (import (pkgs.path + "/nixos/tests/make-test-python.nix")) ({
