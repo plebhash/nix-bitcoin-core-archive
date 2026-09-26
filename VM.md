@@ -2,7 +2,7 @@
 
 Goal: every one of the 137 Bitcoin Core releases under `core/` (v31.1 →
 v0.1.5) runs as its own minimal nixOS VM, all on a single bare-metal
-x86-64 host with KVM. Built by `core/vm.nix`, deployed by the
+x86-64 host with KVM. Built by `vm/all.nix`, deployed by the
 `deploy-fleet.sh` it generates.
 
 This is the *deployment* plan; the *verification* harness is
@@ -111,9 +111,9 @@ ssh); until then they idle at block 0, RPC healthy.
 ```
 # on the build host (era checkouts available — same env vars as tests/vm):
 NIXPKGS_16_09=… NIXPKGS_20_09=… NIXPKGS_23_11=… NIXPKGS_25_05=… \
-  nix-build core/vm.nix -A fleet            # builds 137 images + the bundle
+  nix-build vm/all.nix -A fleet            # builds 137 images + the bundle
 # or iterate on one:
-nix-build core/vm.nix -A images.31.1
+nix-build vm/all.nix -A images.31.1
 
 # on the target host:
 nix-store --realise /nix/store/…-bitcoin-core-archive-fleet

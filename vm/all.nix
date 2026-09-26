@@ -27,90 +27,25 @@
 #   descending version order.
 #
 # Build on the build host:
-#   nix-build core/vm.nix -A fleet         # 137 toplevels + 137 wrappers
+#   nix-build vm/all.nix -A fleet         # 137 toplevels + 137 wrappers
 #   # -A cannot select dotted attr names, so single images go via -E:
-#   nix-build $(nix-instantiate --eval --strict -E '(import ./core/vm.nix).images."31.1"')
+#   nix-build $(nix-instantiate --eval --strict -E '(import ./vm/all.nix).images."31.1"')
 
 let
-  eraPath = var:
-    let
-      p = builtins.getEnv var;
-    in
-    assert p != "";
-    assert builtins.pathExists p;
-    p;
-
-  pkgsRoot = eraPath "NIXPKGS_25_05";
-  pkgs = import pkgsRoot { system = builtins.currentSystem; };
-  lib = pkgs.lib;
-
-  # Era nixpkgs checkouts (the derivation in core/<v> is evaluated with
-  # the generation its era was built with — same mapping as tests/vm).
-  eras = {
-    "16.09" = import (eraPath "NIXPKGS_16_09") { system = builtins.currentSystem; };
-    "20.09" = import (eraPath "NIXPKGS_20_09") { system = builtins.currentSystem; };
-    "23.11" = import (eraPath "NIXPKGS_23_11") { system = builtins.currentSystem; };
-    "25.05" = pkgs;
-  };
-
-  coreDir = builtins.readDir ./.;
-  # readDir entry format differs between nix versions (string vs { type } set).
-  isDirEntry = e:
-    if builtins.isAttrs e then e.type == "directory" else e == "directory";
-  versions = lib.sort (a: b: builtins.compareVersions a b < 0) (
-    lib.filter (n: n != "_deps" && isDirEntry coreDir.${n})
-    (builtins.attrNames coreDir)
-  );
-
-  eraPkg = version:
-    let
-      era =
-        if lib.versionOlder version "0.13.0" then eras."16.09"   # 0.1.5-0.12.1
-        else if lib.versionOlder version "22.0" then eras."20.09"  # 0.13.0-0.21.2
-        else if lib.versionOlder version "29.0" then eras."23.11"  # 22.0-28.4
-        else eras."25.05";                                       # 29.0-31.1
-    in import ./${version}/default.nix { pkgs = era; };
+  # Shared era/version/tier/key helpers (vm/common.nix — also used by
+  # vm/swap.nix and tests/vm/swap.nix).
+  common = import ./common.nix;
+  inherit (common) pkgsRoot pkgs lib eras versions eraPkg tierOf resOf;
+  inherit (common) fleetKeyDir fleetPubKey snapshotSpec;
 
   # Descending version order defines the stable port index.
   versionsDesc = lib.reverseList versions;
   idxMap = lib.listToAttrs (lib.imap0 (i: v: { name = v; value = i; }) versionsDesc);
   idxOf = v: idxMap.${v};
 
-  tierOf = version:
-    if version == "0.1.5" then "src"
-    else if lib.versionOlder version "0.5.0" then "gui"             # 0.2.x-0.4.x
-    else if lib.versionOlder version "0.11.0" then "archival"       # 0.5.0-0.10.4
-    else if lib.versionOlder version "0.13.0" then "archival-pruned" # 0.11.0-0.12.1
-    else if lib.versionOlder version "28.0" then "ibd"              # 0.13.0-27.2
-    else if lib.versionOlder version "29.0" then "snapshot-840000"  # 28.0-28.4
-    else if lib.versionOlder version "30.0" then "snapshot-880000"  # 29.0-29.4
-    else if lib.versionOlder version "31.0" then "snapshot-910000"  # 30.0-30.3
-    else "snapshot-935000";                                        # 31.0-31.1
-
-  resOf = tier:
-    if tier == "src" || tier == "gui" then { diskMib = 2048; ramMib = 512; vcpu = 1; }
-    else if tier == "archival" then { diskMib = 40960; ramMib = 1024; vcpu = 2; }
-    else if tier == "archival-pruned" then { diskMib = 16384; ramMib = 1024; vcpu = 2; }
-    else if lib.hasPrefix "snapshot" tier then { diskMib = 32768; ramMib = 2048; vcpu = 2; }
-    else { diskMib = 16384; ramMib = 2048; vcpu = 2; };            # ibd
-
   # Host name (and run-script/unit prefix) per version: dots -> dashes.
   hostOf = version: "btc-${lib.replaceStrings ["."] ["-"] version}";
 
-  # Fleet ssh keypair — disposable, fleet-only, and never in git:
-  # <repo>/fleet-keys (git-ignored), generate at the repo root with
-  #   ssh-keygen -t ed25519 -N "" -C fleet -f fleet-keys/id_ed25519
-  # FLEET_KEYS=/path/to/keydir overrides the location.
-  fleetKeyDir =
-    let
-      p = builtins.getEnv "FLEET_KEYS";
-      d = if p != "" then p else ./../fleet-keys;
-    in
-    assert builtins.pathExists (d + "/id_ed25519")
-      && builtins.pathExists (d + "/id_ed25519.pub");
-    d;
-
-  fleetPubKey = builtins.readFile (fleetKeyDir + "/id_ed25519.pub");
 
   # Lazy per-attribute set: accessing one image evaluates only that
   # version's config (the fleet attr forces all of them via
@@ -190,16 +125,6 @@ let
     vmCfg.config.system.build.vm
   ) (lib.listToAttrs (lib.map (v: { name = v; value = true; }) versions));
 
-  # UTXO snapshot specs (jaonoctus; see VM.md for the best-block table).
-  snapshotSpec = key: {
-    file = "utxo-${key}.dat";
-    url = "https://files-vps02.jaonoctus.dev/utxo-${key}.dat";
-    bestBlock =
-      if key == "840000" then "0000000000000000000320283a032748cef8227873ff4872689bf23f1cda83a5"
-      else if key == "880000" then "000000000000000000010b17283c3c400507969a9c2afd1dcf2082ec5cca2880"
-      else if key == "910000" then "0000000000000000000108970acb9522ffd516eae17acddcb1bd16469194a821"
-      else "0000000000000000000147034958af1652b2b91bba607beacc5e72a56f0fb5ee";
-  };
 
   entries = lib.listToAttrs (lib.map (v: {
     name = v;
@@ -241,7 +166,6 @@ let
     SSH_KEY="$FLEET_DIR/keys/id_ed25519"
 
     die() { echo "FLEET-ERROR: $*" >&2; exit 1; }
-    [ -e /dev/kvm ] || die "/dev/kvm missing — KVM not available"
     command -v jq >/dev/null || die "jq not found"
     [ -e "$JSON" ] || die "fleet.json missing next to this script"
     [ -e "$SSH_KEY" ] || die "fleet ssh key missing next to this script"
@@ -273,6 +197,7 @@ let
 
     start_vm() {
       local v="$1" rs
+      [ -e /dev/kvm ] || die "/dev/kvm missing — KVM not available"
       rs="$(run_script "$v")"
       [ -n "$rs" ] && [ -x "$rs" ] || die "run script missing for $v"
       mkdir -p "$(vm_dir "$v")"
@@ -297,9 +222,9 @@ let
       local v="$1" host key file url best host_snap bb
       host="$(host_name "$v")"
       key="$(field "$v" snapshotKey)"
-      file="$(field "$v" snapshotFile)"
-      url="$(field "$v" snapshotUrl)"
-      best="$(field "$v" snapshotBestBlock)"
+      file="$(field "$v" file)"
+      url="$(field "$v" url)"
+      best="$(field "$v" bestBlock)"
       host_snap="$ROOT/snap/$file"
       mkdir -p "$ROOT/snap"
       if [ ! -s "$host_snap" ]; then
@@ -318,7 +243,7 @@ let
 
     do_deploy() {
       local wave=16 v n
-      while [ "$1" = "--wave" ]; do
+      while [ "''${1:-}" = "--wave" ]; do
         wave="$2"; shift 2
       done
       n=0

@@ -27,9 +27,9 @@ let
   lib = pkgs.lib;
 
   # The archive: every version directory under ../../core (sorted).
-  # Only real directories are versions — core/ also holds vm.nix (the
-  # fleet) and _deps/, which are not releases. readDir entries are a
-  # string on some nix versions and a { type } set on others.
+  # Only real directories are versions — core/ also holds _deps/
+  # (shared build helpers), which is not a release. readDir entries
+  # are a string on some nix versions and a { type } set on others.
   isDirEntry = e:
     if builtins.isAttrs e then e.type == "directory" else e == "directory";
   versions = builtins.attrNames (lib.listToAttrs (lib.map (v: { name = v; value = v; }) (
