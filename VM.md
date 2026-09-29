@@ -64,7 +64,7 @@ chainstates coexist).
 ## Per-tier flags (the service each VM runs)
 
 All: `-server -datadir=/var/lib/btc-<version> -rpcbind=127.0.0.1
--rpcport=<18443+idx> -rpcuser=archive -rpcpassword=archive`, where
+-rpcport=<18443+idx> -rpcuser=archive -rpcpassword=archivepass`, where
 `idx` is the version's position in the sorted list (so each VM has a
 stable, collision-free port; the host forwards each port to one VM via
 qemu user-net `hostfwd`).
@@ -127,6 +127,17 @@ The fleet bundle contains `deploy-fleet.sh` and `fleet.json`
 (version → tier, ports, image store path, snapshot spec).
 Images are qcow2 (sparse); first `deploy` copies them into
 `/var/lib/btc-fleet/vm/<version>/`.
+
+Verified live-boot facts (single-group smoke, 2026-09-29): guests
+authenticate root over the forwarded ssh port with the bundle's
+`keys/id_ed25519`. The image sshd runs with `StrictModes no` on
+purpose — authorized keys live at `/etc/ssh/authorized_keys`, a
+`/nix/store` symlink virtfs-shared from the HOST, and a group-writable
+host store (the common `root:nixbld 1775` multi-user layout) makes
+OpenSSH's StrictModes ancestor walk refuse the key ("bad ownership or
+modes for directory /nix/store"). Keep `-rpcuser` different from
+`-rpcpassword`: pre-0.10 binaries abort at `StartRPCThreads` when the
+two are equal on mainnet (the regtest VM tests skip that check).
 
 ## Known risks
 

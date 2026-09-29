@@ -219,7 +219,7 @@ let
       # prints "Bitcoin Core starting" to stdout before forking, and
       # that line would land in runner.out as a non-verdict line.
       timeout -k 5 30 "$b" -regtest -daemon -datadir="$d" -server \
-        -rpcuser=archive -rpcpassword=archive -rpcport=18443 \
+        -rpcuser=archive -rpcpassword=archivepass -rpcport=18443 \
         -rpcbind=127.0.0.1 >"$d.out" 2>"$d.err"
       if [ "$?" -ne 0 ]; then
         dbg=$(tail -3 "$d.err" 2>/dev/null | tr '\n' '|')
@@ -250,7 +250,7 @@ let
           # never stall the suite (a hung RPC reply would otherwise
           # block bitcoind -stop forever)
           timeout -k 5 15 "$b" -stop -datadir="$d" \
-            -rpcuser=archive -rpcpassword=archive >/dev/null 2>&1 \
+            -rpcuser=archive -rpcpassword=archivepass >/dev/null 2>&1 \
             || pkill -f "datadir=$d" 2>/dev/null
           i=0
           while [ $i -lt 30 ]; do

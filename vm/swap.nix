@@ -80,8 +80,10 @@ let
           "-server"
           "-rpcbind=127.0.0.1"
           "-rpcport=${toString rpcPort}"
+          # rpcuser MUST differ from rpcpassword (pre-0.10 Core aborts
+          # at StartRPCThreads when equal on mainnet; regtest skips it).
           "-rpcuser=archive"
-          "-rpcpassword=archive"
+          "-rpcpassword=archivepass"
         ]
         # -prune exists from 0.11.0; older GUI-era members get no prune.
         ++ (if lib.versionOlder v "0.11.0" then [ ] else pruneFlag tier)
@@ -106,8 +108,17 @@ let
             networking.hostName = host;
             services.openssh.enable = true;
             services.openssh.settings.PermitRootLogin = "prohibit-password";
-            # The 25.05 era checkouts in this environment lack the
-            # nixos users module, so inject the fleet key via /etc:
+            # This era checkout has no services/ssh/user-module.nix, so the
+            # fleet key is injected via environment.etc -> a /nix/store
+            # symlink. sshd's StrictModes walks the REAL path's ancestors
+            # and refuses authorized keys under any group-writable
+            # directory; a KVM host's /nix/store (virtfs-exported into the
+            # guest) is routinely group-writable (multi-user nix: root:
+            # nixbld 1775), which made every fleet ssh login fail with
+            # "bad ownership or modes for directory /nix/store". The key
+            # content is store-immutable, so relax StrictModes instead of
+            # requiring pristine store perms on every deploy target.
+            services.openssh.settings.StrictModes = false;
             services.openssh.settings.AuthorizedKeysFile =
               "/etc/ssh/authorized_keys";
             environment.etc."ssh/authorized_keys".text = fleetPubKey;
@@ -253,7 +264,7 @@ let
 
     rpc() {
       local g="$1"; shift
-      ssh_vm "$g" "bitcoin-cli -rpcport=$(field "$g" rpcPort) -rpcuser=archive -rpcpassword=archive $*"
+      ssh_vm "$g" "bitcoin-cli -rpcport=$(field "$g" rpcPort) -rpcuser=archive -rpcpassword=archivepass $*"
     }
 
     running() { pgrep -f "$(vm_dir "$1")/vm.qcow2" >/dev/null 2>&1; }

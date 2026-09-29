@@ -66,8 +66,14 @@ let
             "-server"
             "-rpcbind=127.0.0.1"
             "-rpcport=${toString rpcPort}"
+            # rpcuser MUST differ from rpcpassword: pre-0.10 Core aborts
+            # at StartRPCThreads when the two are equal (or empty) on
+            # networks where RequireRPCPassword() is true — mainnet.
+            # regtest skips the check, which is why the VM tests pass
+            # with equal credentials; the deployed mainnet fleet loops
+            # on "you must set a rpcpassword in the configuration file".
             "-rpcuser=archive"
-            "-rpcpassword=archive"
+            "-rpcpassword=archivepass"
           ]
           ++ (
             if tier == "archival" then [ ]
@@ -88,8 +94,17 @@ let
             networking.hostName = host;
             services.openssh.enable = true;
             services.openssh.settings.PermitRootLogin = "prohibit-password";
-            # The 25.05 era checkouts in this environment lack the
-            # nixos users module, so inject the fleet key via /etc:
+            # This era checkout has no services/ssh/user-module.nix, so the
+            # fleet key is injected via environment.etc -> a /nix/store
+            # symlink. sshd's StrictModes walks the REAL path's ancestors
+            # and refuses authorized keys under any group-writable
+            # directory; a KVM host's /nix/store (virtfs-exported into the
+            # guest) is routinely group-writable (multi-user nix: root:
+            # nixbld 1775), which made every fleet ssh login fail with
+            # "bad ownership or modes for directory /nix/store". The key
+            # content is store-immutable, so relax StrictModes instead of
+            # requiring pristine store perms on every deploy target.
+            services.openssh.settings.StrictModes = false;
             services.openssh.settings.AuthorizedKeysFile =
               "/etc/ssh/authorized_keys";
             environment.etc."ssh/authorized_keys".text = fleetPubKey;
@@ -190,7 +205,7 @@ let
 
     rpc() {
       local v="$1"; shift
-      ssh_vm "$v" "bitcoin-cli -rpcport=$(field "$v" rpcPort) -rpcuser=archive -rpcpassword=archive $*"
+      ssh_vm "$v" "bitcoin-cli -rpcport=$(field "$v" rpcPort) -rpcuser=archive -rpcpassword=archivepass $*"
     }
 
     running() { pgrep -f "$(vm_dir "$1")/vm.qcow2" >/dev/null 2>&1; }
@@ -234,8 +249,8 @@ let
       echo "  $v: streaming $file into the guest ..."
       ssh_vm "$v" "mkdir -p /var/lib/$host"
       ssh_vm "$v" "cat > /var/lib/$host/$file" < "$host_snap"
-      ssh_vm "$v" "bitcoin-cli -rpcport=$(field "$v" rpcPort) -rpcuser=archive -rpcpassword=archive loadtxoutset $file"
-      bb="$(ssh_vm "$v" "bitcoin-cli -rpcport=$(field "$v" rpcPort) -rpcuser=archive -rpcpassword=archive gettxoutsetinfo | jq -r .bestblock")"
+      ssh_vm "$v" "bitcoin-cli -rpcport=$(field "$v" rpcPort) -rpcuser=archive -rpcpassword=archivepass loadtxoutset $file"
+      bb="$(ssh_vm "$v" "bitcoin-cli -rpcport=$(field "$v" rpcPort) -rpcuser=archive -rpcpassword=archivepass gettxoutsetinfo | jq -r .bestblock")"
       [ "$bb" = "$best" ] || die "$v: snapshot bestblock mismatch: $bb != $best"
       ssh_vm "$v" "rm -f /var/lib/$host/$file"
       echo "  $v: snapshot $key loaded (best block $bb)"
