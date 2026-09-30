@@ -94,15 +94,25 @@ let
 
   fleetPubKey = builtins.readFile (fleetKeyDir + "/id_ed25519.pub");
 
-  # UTXO snapshot specs (jaonoctus; see VM.md for the best-block table).
-  snapshotSpec = key: {
+  # UTXO snapshot specs (jaonoctus; see VM.md for the best-block
+  # table — THE TABLE IS AUTHORITATIVE; these values were once
+  # transcribed truncated (60/62 chars), which made the post-load
+  # bestblock comparison die after every ~9 GiB stream. The asserts
+  # below refuse to evaluate a non-64-hex hash at all.)
+  snapshotSpec = key:
+  let
+    bestBlock =
+      if key == "840000" then "0000000000000000000320283a032748cef8227873ff4872689bf23f1cda83a5"
+      else if key == "880000" then "000000000000000000010b17283c3c400507969a9c2afd1dcf2082ec5cca2880"
+      else if key == "910000" then "0000000000000000000108970acb9522ffd516eae17acddcb1bd16469194a821"
+      else "0000000000000000000147034958af1652b2b91bba607beacc5e72a56f0fb5ee";
+  in
+  assert builtins.stringLength bestBlock == 64;
+  assert builtins.match "[0-9a-f]{64}" bestBlock != null;
+  {
     file = "utxo-${key}.dat";
     url = "https://files-vps02.jaonoctus.dev/utxo-${key}.dat";
-    bestBlock =
-    if key == "840000" then "0000000000000000000320283a032748cef8227873ff4872689bf23f1cda83a5"
-    else if key == "880000" then "0000000000000000010b17283c3c4005079a9c2afd1dcf2082ec5cca2880"
-    else if key == "910000" then "00000000000000000108970acb9522ffd516eae17acddcb1bd16469194a821"
-    else "00000000000000000147034958af1652b2b91bba607beacc5e72a56f0fb5ee";
+    inherit bestBlock;
   };
 
   # --- datadir-format compatibility groups ---------------------------

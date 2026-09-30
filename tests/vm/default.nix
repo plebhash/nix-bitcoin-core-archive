@@ -235,7 +235,7 @@ let
       i=0
       while [ $i -lt 45 ]; do
         sleep 1
-        rpc=$(curl -s -m 5 -u archive:archive http://127.0.0.1:18443/ \
+        rpc=$(curl -s -m 5 -u archive:archivepass http://127.0.0.1:18443/ \
               -d '{"method":"getblockcount"}' 2>/dev/null) || rpc=""
         # only a genuine result:0 ends the loop: a -28 "Loading
         # wallet" warmup error must keep polling, not break (it

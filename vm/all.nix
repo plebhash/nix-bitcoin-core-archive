@@ -114,9 +114,15 @@ let
             virtualisation.memorySize = res.ramMib;
             virtualisation.diskSize = res.diskMib;
             virtualisation.forwardPorts =
-              [ { proto = "tcp"; host.port = 2222 + idx; guest.port = 22; } ]
+              # host.address MUST stay "127.0.0.1": the qemu-vm module
+              # defaults it to "" and qemu slirp then binds the forward
+              # on ALL host interfaces — root ssh and the RPC port of a
+              # mainnet daemon with the repo-published archive/archivepass
+              # credentials would be reachable from the LAN.
+              [ { proto = "tcp"; host.address = "127.0.0.1"; host.port = 2222 + idx; guest.port = 22; } ]
               ++ lib.optional (flags != null) {
                 proto = "tcp";
+                host.address = "127.0.0.1";
                 host.port = rpcPort;
                 guest.port = rpcPort;
               };
@@ -210,12 +216,44 @@ let
 
     running() { pgrep -f "$(vm_dir "$1")/vm.qcow2" >/dev/null 2>&1; }
 
+    gc_pin() {
+      # The per-VM root disk is a qcow2 CoW snapshot BACKED by the
+      # image's store path — a routine nix-collect-garbage deletes the
+      # backing file and bricks every VM. The deploy runs as root on
+      # the target, so register the image in the global gcroots dir;
+      # files there hold one store path per line.
+      if [ -w /nix/var/nix/gcroots ]; then
+        grep -qxF "$1" /nix/var/nix/gcroots/btc-fleet 2>/dev/null \
+          || echo "$1" >> /nix/var/nix/gcroots/btc-fleet
+      else
+        echo "  $2: warning: /nix/var/nix/gcroots not writable — a nix-collect-garbage here deletes $1 and bricks its VMs" >&2
+      fi
+    }
+
     start_vm() {
-      local v="$1" rs
+      local v="$1" rs img stamp want have
       [ -e /dev/kvm ] || die "/dev/kvm missing — KVM not available"
+      img="$(field "$v" image)"
       rs="$(run_script "$v")"
       [ -n "$rs" ] && [ -x "$rs" ] || die "run script missing for $v"
       mkdir -p "$(vm_dir "$v")"
+      gc_pin "$img" "$v"
+      # The qcow2 freezes the config BAKED INTO THE IMAGE it was
+      # created from; the run wrapper never re-checks it. Without a
+      # stamp, a rebuilt image (every config change — the smoke run
+      # proved it with the pre-0d671c4 equal-rpc-credentials unit) is
+      # silently ignored on hosts that booted once. Discarding the
+      # disk on an image bump loses that VM's chain too (its datadir
+      # lives on the CoW root), so expect a resync — but a re-deploy
+      # after an image bump is a config decision anyway.
+      stamp="$(vm_dir "$v")/.image-id"
+      want="$(basename "$img")"
+      have="$(cat "$stamp" 2>/dev/null || true)"
+      if [ -e "$(vm_dir "$v")/vm.qcow2" ] && [ "$have" != "$want" ]; then
+        [ -z "$have" ] || echo "  $v: image changed ($have -> $want): discarding stale root disk"
+        rm -f "$(vm_dir "$v")/vm.qcow2"
+      fi
+      printf '%s\n' "$want" > "$stamp"
       if running "$v"; then
         echo "  $v: already running"
         return 0
@@ -241,10 +279,15 @@ let
       url="$(field "$v" url)"
       best="$(field "$v" bestBlock)"
       host_snap="$ROOT/snap/$file"
+      wait_rpc "$v"
       mkdir -p "$ROOT/snap"
       if [ ! -s "$host_snap" ]; then
         echo "  $v: downloading $file (~9 GiB) ..."
-        curl -fL --retry 3 -o "$host_snap" "$url"
+        # .part + rename: an interrupted curl must never leave a
+        # truncated utxo-*.dat that every later run accepts as the
+        # complete cache (loadtxoutset then dies on malformed input).
+        curl -fL --retry 3 -o "$host_snap.part" "$url"
+        mv "$host_snap.part" "$host_snap"
       fi
       echo "  $v: streaming $file into the guest ..."
       ssh_vm "$v" "mkdir -p /var/lib/$host"
@@ -257,10 +300,15 @@ let
     }
 
     do_deploy() {
-      local wave=16 v n
+      local wave=16 v n faildir
       while [ "''${1:-}" = "--wave" ]; do
         wave="$2"; shift 2
       done
+      # start_vm runs in an async subshell; bare `wait` always exits 0,
+      # so failures are recorded as marker files instead of being lost.
+      faildir="$ROOT/.deploy-failures"
+      rm -rf "$faildir"
+      mkdir -p "$faildir"
       n=0
       for v in $(version_list); do
         if [ "$n" -ge "$wave" ]; then
@@ -268,10 +316,17 @@ let
           n=$((n - 1))
         fi
         echo "  $v: $(field "$v" tier)"
-        start_vm "$v" &
+        ( start_vm "$v" && exit 0 || : > "$faildir/$v" ) &
         n=$((n + 1))
       done
       wait
+      if [ -n "$(ls -A "$faildir" 2>/dev/null || true)" ]; then
+        echo "FLEET-ERROR: these VMs failed to boot:" >&2
+        ls "$faildir" | sed 's|^|  |' >&2
+        rm -rf "$faildir"
+        exit 1
+      fi
+      rm -rf "$faildir"
       echo "Fleet deployed. Next: deploy-fleet.sh snapshot (snapshot tier) — status anytime."
     }
 

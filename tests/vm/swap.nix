@@ -132,16 +132,19 @@ let
       && echo "OK static: group count" \
       || { echo "FAIL static: group count (want ${toString expectGroups})"; fail=1; }
 
-    # anchor == newest version; sshPort = 2222 + no - 2; rpcPort null
-    # exactly when every member is a GUI-era binary; image is a store
-    # path; snapshotKey present exactly for snapshot-tier anchors.
+    # anchor == newest version; sshPort = 3222 + no - 2 and rpcPort =
+    # 19443 + no - 2 (the +1000 offsets over vm/all.nix that let both
+    # bundles share a host); rpcPort null exactly when every member is
+    # a GUI-era binary; image is a store path; snapshotKey present
+    # exactly for snapshot-tier anchors.
     jq -e '
       def isgui: split(".") as $p
         | ($p[0] | tonumber) == 0 and (($p[1] | tonumber) < 5);
       [ .groups[] as $g
         | select(
             ($g.anchor != ($g.versions | last))
-            or ($g.sshPort != (2222 + ($g.no - 2)))
+            or ($g.sshPort != (3222 + ($g.no - 2)))
+            or (($g.rpcPort != null) and ($g.rpcPort != (19443 + ($g.no - 2))))
             or ((($g.rpcPort == null) and (([$g.versions[] | isgui] | all) | not))
                 or ((($g.rpcPort == null) | not) and ([$g.versions[] | isgui] | all)))
             or (($g.image | startswith("/nix/store/")) | not)

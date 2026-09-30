@@ -29,8 +29,10 @@
 #
 # Per-group resources follow the anchor's tier (vm/common.nix resOf).
 # Ports (host 127.0.0.1, qemu user-net hostfwd per guest):
-#   ssh 2222+idx, rpc 18443+idx — idx = group position 0..N-2 in
-#   ascending group number (= ascending anchor version).
+#   ssh 3222+idx, rpc 19443+idx — idx = group position 0..N-2 in
+#   ascending group number (= ascending anchor version).  The +1000
+#   offsets over vm/all.nix (2222+/18443+) let both bundles run on
+#   one host simultaneously.
 #
 # Build on the build host:
 #   nix-build vm/swap.nix -A swapBundle   # group images + the bundle
@@ -53,15 +55,28 @@ let
     if lib.versionOlder v "0.5.0" then "bitcoin-${host}-${verdash v}" # wx2.9 GUI
     else "bitcoind-${host}-${verdash v}";
 
+  # The anchor's tier drives resources + prune — EXCEPT when the
+  # group has members predating -prune (< 0.11.0): those binaries
+  # cannot read a pruned blocks dir at all, so the shared datadir
+  # must stay unpruned (group 8 = 0.10.0-0.11.3: the 0.11.3 anchor
+  # pruned the very directory its 0.10.x members must boot against,
+  # and they crash-loop on "Corrupted block database"). Those groups
+  # get the archival (full-chain) treatment instead.
+  swapTier = g:
+    let t = tierOf (anchorOf g);
+    in if (t == "archival-pruned" || t == "ibd")
+         && lib.any (v: lib.versionOlder v "0.11.0") g.versions
+       then "archival"
+       else t;
   images = lib.mapAttrs (_: g:
     let
       host = hostOf g;
       anchor = anchorOf g;
-      tier = tierOf anchor;
+      tier = swapTier g;
       res = resOf tier;
       idx = idxOf g;
-      sshPort = 2222 + idx;
-      rpcPort = 18443 + idx;
+      sshPort = 3222 + idx;
+      rpcPort = 19443 + idx;
       datadir = "/var/lib/${host}";
       hasDaemon = lib.any (v: ! (lib.versionOlder v "0.5.0")) g.versions;
       hasGui = lib.any (v: lib.versionOlder v "0.5.0") g.versions;
@@ -128,9 +143,15 @@ let
             virtualisation.memorySize = res.ramMib;
             virtualisation.diskSize = res.diskMib;
             virtualisation.forwardPorts =
-              [ { proto = "tcp"; host.port = sshPort; guest.port = 22; } ]
+              # host.address MUST stay "127.0.0.1": the qemu-vm module
+              # defaults it to "" and qemu slirp then binds the forward
+              # on ALL host interfaces — root ssh and the RPC port of a
+              # mainnet daemon with the repo-published archive/archivepass
+              # credentials would be reachable from the LAN.
+              [ { proto = "tcp"; host.address = "127.0.0.1"; host.port = sshPort; guest.port = 22; } ]
               ++ lib.optional hasDaemon {
                 proto = "tcp";
+                host.address = "127.0.0.1";
                 host.port = rpcPort;
                 guest.port = rpcPort;
               };
@@ -194,11 +215,11 @@ let
         anchor = anchorOf g;
         versions = g.versions;
         engine = g.engine;
-        tier = tierOf (anchorOf g);
+        tier = swapTier g;
         host = hostOf g;
-        sshPort = 2222 + idxOf g;
+        sshPort = 3222 + idxOf g;
         rpcPort =
-          if lib.any (v: ! (lib.versionOlder v "0.5.0")) g.versions then 18443 + idxOf g
+          if lib.any (v: ! (lib.versionOlder v "0.5.0")) g.versions then 19443 + idxOf g
           else null;
         image = "${lib.attrByPath [ (toString g.no) ] {} images}";
         units = lib.listToAttrs (lib.map (v: {
@@ -275,12 +296,43 @@ let
       [ "$p" = "null" ] || echo ", rpc 127.0.0.1:$p"
     }
 
+    gc_pin() {
+      # The per-VM root disk is a qcow2 CoW snapshot BACKED by the
+      # image's store path — a routine nix-collect-garbage deletes the
+      # backing file and bricks every VM. The deploy runs as root on
+      # the target, so register the image in the global gcroots dir;
+      # files there hold one store path per line.
+      if [ -w /nix/var/nix/gcroots ]; then
+        grep -qxF "$1" /nix/var/nix/gcroots/btc-fleet 2>/dev/null \
+          || echo "$1" >> /nix/var/nix/gcroots/btc-fleet
+      else
+        echo "  $2: warning: /nix/var/nix/gcroots not writable — a nix-collect-garbage here deletes $1 and bricks its VMs" >&2
+      fi
+    }
+
     start_vm() {
-      local g="$1" rs
+      local g="$1" rs img stamp want have
       [ -e /dev/kvm ] || die "/dev/kvm missing — KVM not available"
+      img="$(field "$1" image)"
       rs="$(run_script "$g")"
       [ -n "$rs" ] && [ -x "$rs" ] || die "run script missing for group $g"
       mkdir -p "$(vm_dir "$g")"
+      gc_pin "$img" "group $g"
+      # The qcow2 freezes the config BAKED INTO THE IMAGE; the run
+      # wrapper never re-checks it. Stamp the image store path and
+      # discard the root disk when it changes — otherwise hosts that
+      # booted once keep running the old config forever (the smoke
+      # run proved it with the pre-0d671c4 equal-credentials unit).
+      # The discard loses the group's chain too (datadir on the CoW
+      # root): expect a resync after an image bump.
+      stamp="$(vm_dir "$g")/.image-id"
+      want="$(basename "$img")"
+      have="$(cat "$stamp" 2>/dev/null || true)"
+      if [ -e "$(vm_dir "$g")/vm.qcow2" ] && [ "$have" != "$want" ]; then
+        [ -z "$have" ] || echo "  group $g: image changed ($have -> $want): discarding stale root disk"
+        rm -f "$(vm_dir "$g")/vm.qcow2"
+      fi
+      printf '%s\n' "$want" > "$stamp"
       if running "$g"; then
         echo "  group $g: already running"
         return 0
@@ -356,10 +408,18 @@ let
       url="$(field "$g" url)"
       best="$(field "$g" bestBlock)"
       host_snap="$ROOT/snap/$file"
+      # The daemon needs RestartSec + startup before RPC binds;
+      # loadtxoutset against a down daemon would abort the whole
+      # snapshot loop under set -e (VM.md's flow promises this wait).
+      wait_rpc "$g"
       mkdir -p "$ROOT/snap"
       if [ ! -s "$host_snap" ]; then
         echo "  group $g: downloading $file (~9 GiB) ..."
-        curl -fL --retry 3 -o "$host_snap" "$url"
+        # .part + rename: an interrupted curl must never leave a
+        # truncated utxo-*.dat that every later run accepts as the
+        # complete cache (loadtxoutset then dies on malformed input).
+        curl -fL --retry 3 -o "$host_snap.part" "$url"
+        mv "$host_snap.part" "$host_snap"
       fi
       echo "  group $g: streaming $file into the guest ..."
       ssh_vm "$g" "mkdir -p /var/lib/$host"

@@ -66,8 +66,13 @@ chainstates coexist).
 All: `-server -datadir=/var/lib/btc-<version> -rpcbind=127.0.0.1
 -rpcport=<18443+idx> -rpcuser=archive -rpcpassword=archivepass`, where
 `idx` is the version's position in the sorted list (so each VM has a
-stable, collision-free port; the host forwards each port to one VM via
-qemu user-net `hostfwd`).
+stable port; the host forwards each port to one VM via qemu user-net
+`hostfwd`). The forwards pin `host.address = "127.0.0.1"` explicitly:
+the qemu-vm module's default `""` makes slirp bind **every** host
+interface, which would hand the LAN root ssh and the archivepass RPC
+of these EOL daemons. The swap bundle (`vm/swap.nix`) offsets its
+forwards by +1000 (ssh `3222+idx`, RPC `19443+idx`) so both bundles
+can run on one host.
 
 - `archival` (0.5.0–0.10.4): no `-prune` (unknown before 0.11).
 - `archival-pruned` (0.11.0–0.12.1): `-prune=550`.
@@ -112,8 +117,9 @@ ssh); until then they idle at block 0, RPC healthy.
 # on the build host (era checkouts available — same env vars as tests/vm):
 NIXPKGS_16_09=… NIXPKGS_20_09=… NIXPKGS_23_11=… NIXPKGS_25_05=… \
   nix-build vm/all.nix -A fleet            # builds 137 images + the bundle
-# or iterate on one:
-nix-build vm/all.nix -A images.31.1
+# or iterate on one (dotted attr names need an expression; `-A images.31.1`
+# parses as images.31."1" and fails):
+nix-build -E '(import ./vm/all.nix).images."31.1"'
 
 # on the target host:
 nix-store --realise /nix/store/…-bitcoin-core-archive-fleet
@@ -124,9 +130,16 @@ result/bin/deploy-fleet.sh stop
 ```
 
 The fleet bundle contains `deploy-fleet.sh` and `fleet.json`
-(version → tier, ports, image store path, snapshot spec).
-Images are qcow2 (sparse); first `deploy` copies them into
-`/var/lib/btc-fleet/vm/<version>/`.
+(version → tier, ports, image store path, snapshot spec). Per-VM
+state is one qcow2 CoW root at `/var/lib/btc-fleet/vm/<version>/
+vm.qcow2`, created on first boot and **backed by** the image's store
+path (nothing is copied there). The deploy script therefore pins each
+image into `/nix/var/nix/gcroots/btc-fleet` (where writable — see
+Known risks) so `nix-collect-garbage` cannot delete a live backing
+file, and stamps every VM dir with the image store hash: a rebuilt
+image discards the stale CoW root (chain resync) instead of silently
+booting the old baked config — the group-7 smoke run proved hosts
+that booted once keep the pre-fix unit forever without this.
 
 Verified live-boot facts (single-group smoke, 2026-09-29): guests
 authenticate root over the forwarded ssh port with the bundle's
@@ -149,7 +162,14 @@ two are equal on mainnet (the regtest VM tests skip that check).
   table. Remedy is manual and per-VM.
 - **pver floor**: whether 2026-era Core still peers with pver-70015
   (0.13/0.14) nodes is unverified; affects only those 8 VMs.
-- **RAM waves**: on a ≤128 GiB host, deploy in waves
-  (`deploy-fleet.sh deploy --wave 24`) and snapshot after each wave.
+- **Backing-file GC without root**: the gc pin needs a writable
+  `/nix/var/nix/gcroots`; as non-root the script warns instead, and a
+  later `nix-collect-garbage` deletes the image backing every CoW
+  root — the VMs then fail to start (re-running `deploy` recreates
+  the disks from the current image; chain resync).
+- **Snapshot cache**: `$BTC_FLEET_ROOT/snap/` keeps one `.dat` per
+  height (~9 GiB × 4) forever; downloads go through `.part` + rename
+  so an interrupted curl never poisons the cache, but prune it
+  manually when disk matters.
 - **era ceiling VMs look "stuck"**: a 0.9.x node at block 363,720 is
   *correct*; do not chase it as a failure.
