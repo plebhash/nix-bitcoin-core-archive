@@ -6,9 +6,8 @@ Nix Bitcoin Core Archive
 <br>
 </h1>
 
-[nix-bitcoin](https://github.com/fort-nix/nix-bitcoin) is useful for running up-to-date `bitcoin-core`.
-
-But sometimes, we need to run old or patched releases in a nix environment.
+Sometimes, we need to run old or patched `bitcoin-core` releases in
+a nix environment.
 
 `nix-bitcoin-core-archive` provides Nix derivations for:
 - old and outdated `bitcoin-core` releases
@@ -16,25 +15,13 @@ But sometimes, we need to run old or patched releases in a nix environment.
 
 ## :warning: security warning
 
-Every release in this archive is **end-of-life software**: it receives
-no security updates, and old binaries link outdated dependencies
-(OpenSSL, Boost, Berkeley DB, …) that carry known, unpatched
-CVEs. Running one on a reachable network — or against a wallet with
-funds — means running software whose vulnerabilities are public
-knowledge. Older versions can also be tricked by chain rules and DoS
-vectors that were fixed long ago.
-
-This project exists for **research and historical exploration**:
-reproducing how old nodes behaved, studying on-disk format evolution,
-testing protocol compatibility, and building reproducible lab
-environments (isolated VMs, `regtest`/`signet`). It is explicitly
-**not intended for production deployments**.
-
-If you need a node you depend on for real value, run a supported
-release — [nix-bitcoin](https://github.com/fort-nix/nix-bitcoin)
-builds current `bitcoin-core`. Treat everything from this archive as
-lab equipment: throwaway datadirs, throwaway keys, no real coins,
-and no public exposure.
+Every release here is **end-of-life software**: no security updates,
+dependencies (OpenSSL, Boost, Berkeley DB) with known unpatched
+CVEs, and years of missing consensus/DoS fixes. This archive exists
+for **research and historical exploration only** — explicitly *not*
+production. Do not run these binaries on reachable networks or with
+real funds: treat them as lab equipment — throwaway datadirs,
+throwaway keys.
 
 ## limitations
 
